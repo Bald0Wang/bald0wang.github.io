@@ -33,7 +33,12 @@ export default defineConfig({
       '/projects/': [
         {
           text: '项目',
-          items: [{ text: '项目总览', link: '/projects/' }]
+          items: [
+            { text: '项目总览', link: '/projects/' },
+            { text: 'Jev Cookbook', link: '/projects/jev-cookbook' },
+            { text: 'VideoDevour', link: '/projects/videodevour' },
+            { text: '暑期 AI 选修课', link: '/projects/ai-course' }
+          ]
         }
       ]
     },

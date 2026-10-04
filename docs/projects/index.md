@@ -2,6 +2,12 @@
 
 > ⭐ 数据截至 2026-10-04，来自 GitHub。
 
+## 项目详情
+
+- [**Jev Cookbook** · Jev 决策模型中文教程](/projects/jev-cookbook) — 主笔，附 Jev 研究综述与教程结构
+- [**VideoDevour** · 把视频变成知识库](/projects/videodevour) — 桌面客户端从 0 到 1 的工程与测试记录
+- [**暑期 AI 选修课** · 教学实践](/projects/ai-course) — 职业院校课程设计与教学理念
+
 ## 个人主导项目
 
 | 项目 | 简介 | 链接 |
