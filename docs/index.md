@@ -1,0 +1,28 @@
+---
+layout: home
+
+hero:
+  name: "Bald0Wang"
+  text: "个人主页 · 知识库"
+  tagline: 记录、整理、沉淀 —— 我的学习与思考
+  actions:
+    - theme: brand
+      text: 进入知识库 →
+      link: /notes/
+    - theme: alt
+      text: 关于我
+      link: /about
+
+features:
+  - icon: 📚
+    title: 知识笔记
+    details: 学习过程中的记录与总结，持续积累、定期回顾
+    link: /notes/
+  - icon: 🛠️
+    title: 项目记录
+    details: 个人项目的想法、进展与复盘
+    link: /projects/
+  - icon: 🔍
+    title: 全文搜索
+    details: 内置搜索，快速定位每一篇笔记
+---

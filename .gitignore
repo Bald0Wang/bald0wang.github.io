@@ -1,0 +1,7 @@
+node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+.DS_Store
+
+# 临时忽略：待 gh 获得 workflow scope 后，删除此行并把部署工作流提交到仓库
+.github/workflows/deploy.yml
