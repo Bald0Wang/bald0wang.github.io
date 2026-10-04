@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vitepress dev docs",
     "build": "vitepress build docs",
-    "preview": "vitepress preview docs"
+    "preview": "vitepress preview docs",
+    "deploy": "bash scripts/deploy.sh"
   },
   "devDependencies": {
     "vitepress": "^1.6.3"

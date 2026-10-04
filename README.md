@@ -33,8 +33,21 @@ docs/
 
 ## 部署说明
 
-- 每次推送到 `main`，Actions 会自动构建并发布，无需手动操作。
-- 仓库当前为**私有**。GitHub 免费版的 Pages 仅对公开仓库开放：
-  - 想让站点上线 → 仓库 Settings → General → 底部 Danger Zone → Change visibility → Public；
-  - 或升级 GitHub Pro 后私有仓库也能用 Pages。
-- 启用方式：Settings → Pages → Build and deployment → Source 选 **GitHub Actions**（已通过 API 自动配置）。
+站点托管在 GitHub Pages，当前采用 **gh-pages 分支**部署（本地一条命令）：
+
+```bash
+npm run deploy    # = 本地构建 + 把产物发布到 gh-pages 分支
+```
+
+- 线上地址：**https://bald0wang.github.io**
+- 每次发布后 Pages 会自动重新构建，稍等约一分钟生效。
+
+### 可选升级：push 即自动部署
+
+如果希望「git push 后 GitHub Actions 自动部署」（省掉手动跑命令），需一次性给 gh 补 workflow 权限：
+
+```bash
+gh auth refresh -h github.com -s workflow   # 按提示在浏览器输入一次性代码
+```
+
+然后删除 `.gitignore` 中对 `.github/workflows/deploy.yml` 的临时忽略行、提交推送该文件，并把 Pages 的 Source 改为 **GitHub Actions**。这些步骤可以让 ZCode 代劳。
