@@ -13,6 +13,7 @@
 
 作为内容创作者与项目发起者参与社区共建：
 
+- [jev-cookbook](https://github.com/datawhalechina/jev-cookbook) —— **主笔 / 第一贡献者**（91 commits），Jev 决策模型中文开源教程
 - [video-devour](https://github.com/datawhalechina/video-devour) —— **第一贡献者**，主导桌面客户端（macOS / Windows）开发
 - [self-dify](https://github.com/datawhalechina/self-dify) —— 项目发起人
 - [self-llm](https://github.com/datawhalechina/self-llm) / [llm-cookbook](https://github.com/datawhalechina/llm-cookbook) —— 内容创作者

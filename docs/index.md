@@ -19,7 +19,7 @@ hero:
 features:
   - icon: 🦞
     title: Datawhale 共建
-    details: video-devour 第一贡献者、self-dify 发起人、self-llm / llm-cookbook 内容创作者
+    details: jev-cookbook 主笔（140⭐）、video-devour 第一贡献者、self-dify 发起人、self-llm / llm-cookbook 内容创作者
     link: /projects/
   - icon: 🛠️
     title: 个人项目

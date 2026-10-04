@@ -19,6 +19,7 @@
 
 | 项目 | 我的角色 |
 | --- | --- |
+| [jev-cookbook](https://github.com/datawhalechina/jev-cookbook) ⭐140 | **主笔 / 第一贡献者**（91 commits）：Jev 决策模型（System One）中文开源教程，11 章 / 18 篇实战配方，覆盖问题原语、RAG 与风控配方、智能家居、模型评测、游戏与 Agent 集成、Jev-Mem 长期记忆与本地模型微调 |
 | [video-devour](https://github.com/datawhalechina/video-devour) ⭐156 | **第一贡献者**（35 commits，13 个 PR 全部合并）：主导桌面客户端（macOS / Windows）从 0 到 1，覆盖打包发版、macOS 签名与 Gatekeeper、Intel 多架构构建、Windows 稳定性修复，以及衍生文体并行生成等性能优化 |
 | [self-dify](https://github.com/datawhalechina/self-dify) | 项目发起人（[DOPMC #237](https://github.com/datawhalechina/DOPMC/issues/237)，2024-04 立项），并提交项目框架 |
 | [self-llm](https://github.com/datawhalechina/self-llm) | 内容创作者（《开源大模型食用指南》） |
