@@ -3,8 +3,8 @@ import { defineConfig } from 'vitepress'
 // 站点配置参考：https://vitepress.dev/zh/reference/site-config
 export default defineConfig({
   lang: 'zh-CN',
-  title: 'Bald0Wang',
-  description: '个人主页与知识库：记录、整理、沉淀',
+  title: '王熠明 Bald0Wang',
+  description: '王熠明（Bald0Wang）的个人主页与知识库 —— Datawhale 成员，AI Agent 开发者',
 
   // 本仓库是用户主页仓库（bald0wang.github.io），站点部署在根路径，无需 base。
   // 若以后改成普通项目仓库，请在这里加 base: '/<仓库名>/'。
@@ -14,8 +14,9 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: '主页', link: '/' },
-      { text: '知识库', link: '/notes/' },
       { text: '项目', link: '/projects/' },
+      { text: '全网足迹', link: '/footprint' },
+      { text: '知识库', link: '/notes/' },
       { text: '关于', link: '/about' }
     ],
 
@@ -67,7 +68,7 @@ export default defineConfig({
 
     footer: {
       message: '记录 · 思考 · 沉淀',
-      copyright: 'Copyright © 2026 Bald0Wang'
+      copyright: 'Copyright © 2026 王熠明 (Bald0Wang)'
     }
   }
 })
