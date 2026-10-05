@@ -1,0 +1,958 @@
+---
+title: Mid-Harness 中文全译
+---
+
+# 《Mid-Harness：在模型与 Harness 之间扩展动作》中文全译
+
+> 📄 原文：*Mid-Harness: Scaling Actions Between Model and Harness for Terminal Agents* · Minki Kang, Ryo Hachiuma, Shaokun Zhang, Subhashree Radhakrishnan, Yonggan Fu, Jindong Jiang, Mingjie Liu, Ehsan Hosseini-Asl, Yi Dong, Yu-Chiang Frank Wang, Byung-Kwan Lee · arXiv [2609.39982](https://arxiv.org/abs/2609.39982) · [PDF](https://arxiv.org/pdf/2609.39982)
+> 🔑 原文以 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 授权发布，本中文翻译遵循同一许可、以相同方式共享。
+> 🤖 全译由 AI（ZCode）辅助完成、经人工校订整理于 2026-10-05；参考文献从略（见原文）。建议与姊妹篇[《Harness Engineering》中文全译](/notes/harness-engineering-zh)对照阅读。
+
+## Mid-Harness：在模型与 Harness（驾驭层）之间为终端智能体扩展动作
+
+**Mid-Harness: Scaling Actions Between Model and Harness for Terminal Agents**
+
+Minki Kang¹,²∗、Ryo Hachiuma¹、Shaokun Zhang¹、Subhashree Radhakrishnan¹、Yonggan Fu¹、Jindong Jiang¹、Mingjie Liu¹、Ehsan Hosseini-Asl¹、Yi Dong¹、Yu-Chiang Frank Wang¹、Byung-Kwan Lee¹†
+
+> 通讯作者：∗ 本工作于实习期间完成。† 项目负责人。
+> arXiv:2609.39982v1 [cs.CL] 30 Sep 2026 ｜ License: CC BY 4.0
+
+### 摘要
+
+终端智能体通过随机的模型生成来执行动作，然而生成有用动作的能力并不能确保该动作被可靠执行。一条糟糕的命令（例如错误的软件包安装）可能以阻碍后续进展的方式改变环境，即使模型本可以生成更好的替代方案。我们研究在模型-Harness 边界处分配测试时计算（test-time compute）能否提升动作可靠性与轨迹成功率，以及是什么使这种分配有效。为研究这些问题，我们提出 Mid-Harness，它在把某个候选动作转发执行之前先对其进行采样与验证，同时保持生成器与 Harness 不变。使用 TMAX-9B 生成器时，在弱验证下增加动作采样几乎没有收益，而一个能力强的验证器能够利用来自同一生成器的有用替代动作。在 TerminalBench-Lite 上，GPT-5.6 Sol 验证器将基础智能体 50.00% 的 Pass@1 提升至 68.03%（采样 8 个动作）。当同一个 TMAX-9B 模型充当验证器时，成对验证（pairwise verification）在所评估的验证机制中表现最佳。将更强验证器的响应蒸馏到 TMAX-9B 中可进一步提升 Pass@1，同时动作生成器保持不变。在 TerminalBench-Lite 上使用 TMAX-9B 时，将动作扩展与轨迹扩展相结合，比单独生成更多轨迹以更低的估算 token 成本达到更高的成功率。Mid-Harness 还在更多模型、基准与 Harness 上带来性能提升。这些发现表明，动作扩展是终端智能体中测试时计算扩展的一个有前景的目标。项目页面见 link。
+
+### 图 1
+
+**图 1：**（a）Mid-Harness 的概念（概念图：Mid-Harness 在执行前验证候选动作）。（b）实证发现总结。有效的动作验证可提升轨迹成功率，并与轨迹扩展互补。TerminalBench-Lite 上 TMAX-9B [1] 的 Pass@1（%）：上图为基础智能体与使用 GPT-5.6 Sol 验证器的 Mid-Harness 的对比；中图为不同验证机制的结果；下图为 Mid-Harness 与 Best-of-$T$（$T=3$）[2] 和 SR（$R=1$）[3] 的组合。Mid-Harness 使用 $N=8$。
+
+## 1 引言
+
+大语言模型（LLM）日益驱动着在软件工程、数据科学与科学发现中执行任务的终端智能体 [4, 5]。然而，生成有用动作的能力并不能确保智能体可靠地完成任务。相同的模型与 Harness 可能一次运行成功、另一次运行失败，因为每次运行都要执行由随机生成的动作构成的长时程序列。每条被执行的命令都会改变后续决策所依赖的环境 [6, 7, 8]。因此，一条糟糕的命令（例如错误的代码编辑、错误的软件包安装）可能通过改变环境而阻碍后续进展，即使模型本可以生成更好的替代方案 [9]。我们将动作可靠性（action reliability）定义为持续生成有助于任务完成的动作，并通过任务成功来评估其轨迹层面的后果。
+
+已有工作通过把额外的测试时计算分配给采样、验证与精炼来提升推理与智能体性能 [10, 11, 12, 3, 2]，其中包括在执行前对候选动作进行验证 [13, 14]。这些成功激发了为动作可靠性进行计算扩展的动机，但对于这种扩展何时以及为何能提升轨迹成功，仍缺乏完整的理解。特别是，生成更多候选的收益取决于验证它们的能力，因此联合研究这些因素十分重要 [15]。为此，我们对动作采样与验证开展系统研究，并追问：在动作执行之前的额外计算何时能提升轨迹成功？又是什么使其有效？
+
+为探究这些问题，我们提出 Mid-Harness，这是一种在模型-Harness 边界研究动作级计算扩展的方法，同时保持动作生成器与执行用 Harness 不变（图 1(a)）。在每一步，Mid-Harness 使用相同的交互历史向生成器请求若干候选动作，应用一个验证器，并仅把选中的候选转发给 Harness 执行。我们的主要比较在 TMAX-9B [1] 及其 Harness 固定的情况下，变化候选宽度、验证机制与验证器能力。我们利用这些比较研究两个前提条件：生成器是否提供了有用的替代动作，以及验证能否在执行前识别出它们 [16]。
+
+我们首先追问：生成器是否已经产生了有用的替代动作——若能被可靠识别，它们本可提升轨迹成功。由于候选动作缺乏真值标签，我们使用一个强验证器来探查这一机会。在 TerminalBench-Lite [17] 上以 TMAX-9B 为固定生成器时，由 GPT-5.6 Sol [18] 进行的验证把基础智能体的 Pass@1 从 50.00% 提升至 68.03%（图 1(b)）。这一结果提供了证据：生成器确实产生了验证可以利用的有用替代动作，从而在不改变生成器或对其进行进一步后训练的情况下提升轨迹成功。
+
+接下来，我们考察在自验证（self-verification）设置下——即同一个模型既生成又验证动作——能够回收这一机会的多大部分。我们发现，在弱验证下增加候选宽度仅带来边际改进（第 4 节）。在此设置下，成对验证在所评估的机制中表现最佳，这表明即使不更换验证器模型，候选之间的比较方式也很重要（图 2）。把一个以生成器初始化的验证器在来自 GPT-5.6 Sol 的成对响应上微调，可进一步把 Pass@1 从 54.76% 提升至 57.14%，同时动作生成器保持不变（第 4.3 节）。我们的分析表明，蒸馏提高了与前沿验证器（frontier verifier）的离线一致率，但在命令语义与执行可行性上的分歧依然存在（第 5 节）。综合来看，这些结果指出：在不执行动作的前提下验证动作在当前环境中将产生什么效果，是把候选多样性转化为成功轨迹的核心挑战。
+
+最后，我们研究动作扩展的收益能否延伸到轨迹级计算扩展方法。在 TerminalBench-Lite 上，无论采用以 LLM 作为验证器的 Best-of-$T$ 轨迹 [2] 进行并行扩展，还是采用 Sequential Refine [3] 进行顺序扩展，Mid-Harness 都提升了 Pass@1（图 1(b)，第 6.1 节）。使用 TMAX-9B 时，将 Mid-Harness 与一轮 SR 相结合，在 $T=7$ 时超越了 Best-of-$T$，同时估算 token 成本不到其一半（图 6）。我们还在更多模型、任务和 Harness 上观察到收益（第 6.2 节）。
+
+我们的主要发现与贡献如下：
+
+- **验证决定了动作采样的收益。** 在 TerminalBench-Lite 上使用 TMAX-9B 时，更宽的采样在弱验证下几乎没有收益，而强验证器则能带来显著更多的成功轨迹。
+- **验证机制与验证器训练有助于回收这一机会。** 成对验证在所评估的机制中表现最佳，且验证器蒸馏在不改变生成器的情况下提升了轨迹成功。离线分析指出，命令语义与执行可行性是与教师验证器产生分歧的持续性来源。
+- **Mid-Harness 使对终端智能体中动作扩展的系统性研究成为可能。** 通过在固定的模型-Harness 边界上变化采样与验证，我们考察额外计算何时能提升轨迹成功，并证明其与并行和顺序轨迹扩展的兼容性。
+
+## 2 Mid-Harness 方法
+
+Mid-Harness 使我们能够在保持生成器与 Harness 固定的情况下，研究动作候选生成与验证如何影响轨迹成功。下面的伪代码展示了 Mid-Harness 如何在模型调用包装器（model-call wrapper）中加入候选采样与验证：它向保持不变的 Harness 返回一个动作，而不修改模型权重或服务架构。
+
+**Harness 循环（保持不变）**
+
+```
+while not done:
+    response = await model.generate(messages)
+    actions, done = parse(response)
+    obs = await env.execute(actions)
+    messages = update(messages, response, obs)
+```
+
+↓
+
+**模型调用包装器（Mid-Harness）**
+
+```diff
+async def generate(messages):
+-   return await llm.generate(messages)
++   candidates = await llm.generate(messages, n=N)
++   return await verify(llm, messages, candidates)
+```
+
+*集成伪代码。绿色的新增部分在模型调用包装器内部实现 Mid-Harness。*
+
+### 2.1 轨迹内的动作扩展
+
+轨迹级验证比较的是已完成的运行 [2, 12]，而 Mid-Harness 在执行之前比较动作。来自同一历史的候选可能在目的或效果上有所不同，例如是诊断一条失败的命令，还是重试它。因此，对照尚未解决的任务要求来比较各候选，不仅可以改进下一个动作，还可能改进随后遇到的状态，同时只需一个环境实例 [13]。
+
+设 $\pi$ 为动作生成模型，$h_{t}=(o_{0},a_{1},o_{1},\ldots,a_{t-1},o_{t-1})$ 为其交互历史，其中 $o_{0}$ 包含任务指令，其后的观测包含终端反馈[^1]。基础智能体从 $\pi(\cdot\mid h_{t})$ 中抽取并执行一个动作。Mid-Harness 则在以同一历史为条件的情况下采样 $N$ 个候选，并借助验证器 $\psi$ 从中确定一个：
+
+$$
+\mathcal{A}_{t}=(a_{t}^{1},\ldots,a_{t}^{N}),\quad a_{t}^{i}\sim\pi(\cdot\mid h_{t}),\qquad a_{t}^{\star}=\mathrm{Verify}_{\psi}(h_{t},\mathcal{A}_{t})\in\mathcal{A}_{t}.
+\tag{1}
+$$
+
+验证过程 $\mathrm{Verify}_{\psi}$ 可以采用不同的机制，但总是返回所提出的候选之一。Harness 执行该动作，从环境接收观测 $o_{t}$，并把历史更新为 $h_{t+1}=(h_{t},a_{t}^{\star},o_{t})$。其余候选被丢弃，下一组候选将由更新后的历史生成。
+
+[^1]: 遵循 ReAct [6]，生成器在每个采样动作之前生成推理，使用 `＜think＞` 标签 [19]。我们在记号中省略这一推理。验证器接收任务、观测到的历史和候选动作，但不接收为这些候选生成的推理。
+
+### 2.2 验证机制
+
+给定公式 (1) 中的历史 $h_{t}$ 与候选集 $\mathcal{A}_{t}$，验证机制 $\mathrm{Verify}_{\psi}$ 规定了验证器的调用方式，以及如何组合其响应来确定一个待执行动作。我们比较列表式（listwise）、逐点（pointwise）与成对（pairwise）三种机制，以考察验证的形式如何影响对来自固定生成器的候选的利用。在每种情况下，验证器都在执行之前使用任务和观测到的历史来评估所提出的动作。
+
+**列表式验证（Listwise verification）。** 验证器在单个提示中接收整个候选集并返回一个选择：$i^{\star}=\psi_{\mathrm{list}}(h_{t},\mathcal{A}_{t})$ [20]。
+
+- 优点：一次验证器调用即可展示所有备选动作，便于直接比较。
+- 缺点：验证器必须在同一次响应中区分每一个候选并确定它们的排序。随着候选集增大，这种联合决策可能变得困难，即使候选集中含有有用的动作。
+
+**逐点验证（Pointwise verification）。** 验证器为每个候选赋予一个标量分数 $q_{i}=\psi_{\mathrm{point}}(h_{t},a_{t}^{i})$，并返回 $i^{\star}\in\arg\max_{i}q_{i}$。这类似于过程奖励模型（process reward models）的步骤打分 [21, 13, 22]。
+
+- 优点：它把验证分解为可并行运行的 $N$ 次独立评估。
+- 缺点：独立打分必须把目的不同的动作放到可比较的尺度上，即使某个动作单独看似合理，却不如另一个可用候选有用 [23]。
+
+**成对验证（Pairwise verification）。** 验证器在同一历史下接收两个候选，并以比较性分数生成一个偏好 [23, 2]。对于已评估的配对集合 $\mathcal{C}$，令 $J_{ij}=\psi_{\mathrm{pair}}(h_{t},a_{t}^{i},a_{t}^{j})$，且 $i^{\star}=\mathrm{Aggregate}(\{J_{ij}:(i,j)\in\mathcal{C}\})$。默认的成对验证器按已评估配对上的边际加权胜率（margin-weighted win rates）对候选排序，并返回排名最高的动作。
+
+- 优点：它使每次比较聚焦于两个备选之间的差异，并为验证器提供共同的参照。
+- 缺点：从完整候选集中确定一个候选所需的模型调用次数多于列表式或逐点验证。对于 8 个候选，列表式只需 1 次调用，逐点需要 8 次，而比较所有无序配对需要 28 次调用。
+
+在默认机制中，验证器 $\psi$ 遵循生成式验证器（generative verifiers）[24] 的方式，先生成推理，再输出分数或选择。在自验证（self-verification）设置下，生成器 $\pi$ 与验证器 $\psi$ 使用同一个模型。验证细节见附录 B.2。
+
+---
+
+## 3 实验设置
+
+我们评估是什么让动作扩展有效、蒸馏能否改进验证，以及这一扩展轴如何与花费在完整运行上的计算相组合。
+
+**任务与模型。** 主要评估使用 TerminalBench Lite [17, 5]、TMAX-9B 生成器 [1] 与 Vanillux2 harness（驾驭层）。TMAX-9B 以 Qwen3.5-9B [25] 为起点，在使用 Vanillux2 的合成终端任务上通过强化学习训练得到。模型规模实验还额外使用 TMAX-4B 与 TMAX-27B。生成器以温度 0.8 进行采样，最多 64 步，最大上下文 65,536 token，每步输出上限 16,384 token。除非另有说明，验证器使用与生成器相同的语言模型。4.1 节中的前沿验证器使用 GPT-5.6 Sol [18]。
+
+**评估指标。** 一次运行（run）指在某个任务上的一次执行，其轨迹是由此产生的动作与观察序列。我们对每个任务评估三次运行，并将 Pass@1 报告为这三次运行的平均精确成功率。Pass@3 衡量被三次运行中至少一次解决的任务比例。对于 Best-of-$T$，Pass@1 评估每个任务所返回的输出。更多评估细节见附录 B.1。
+
+**基线与计算扩展方法。** 基础智能体在单次运行中每步执行一个采样得到的动作，不做额外的动作验证或轨迹扩展。我们把额外计算组织在两个层面：动作执行之前，以及跨完整运行。
+
+动作层面这一扩展轴在单次运行内部应用 zero-shot 或蒸馏版 Mid-Harness。zero-shot Mid-Harness 使用与生成器相同的模型充当验证器、不做任何微调；蒸馏版 Mid-Harness 的验证器则使用按 4.3 节所述、在来自 GPT-5.6 Sol 的 pairwise 比较上微调过的模型。在轨迹层面，Best-of-$T$ Trajectories（Best-of-$T$）使用概率枢轴锦标赛（probabilistic pivot tournament）从 $T$ 条已完成的轨迹中选出一个输出 [2]。在每个模型规模上，由对应的 TMAX 模型担任轨迹验证器。顺序式轨迹层面方法 Sequential Refine（SR）[3, 12] 执行 $R$ 轮精炼，每轮对上一次运行进行总结以指导一次全新的运行。轨迹摘要由对应的 TMAX 模型生成。更多基线细节见附录 B.1。
+
+**推理成本。** 并行化输出 token（POT，Parallelized output tokens）在理想化并行执行下近似生成器与验证器的解码延迟。验证器总输出 token 则不做并行化，将所有验证器调用的输出求和。图 3 呈现这两项度量。对于图 6，我们对生成器与验证器的 token 应用参考 token 价格作为代理。细节见附录 B.4。
+
+## 4 动作扩展何时有效？
+
+我们在固定 TMAX-9B 生成器的条件下，考察采样与验证何时能改善轨迹成功率、其成本如何，以及验证器蒸馏的效果。
+
+**图 2：验证机制决定了更多动作候选带来的收益。** 在 TerminalBench-Lite 上使用 TMAX-9B 的 Pass@1 与 Pass@3。$N=1$ 表示未做动作扩展的基础智能体。对于前沿验证器，出于成本考虑我们使用 listwise 验证。
+
+### 4.1 候选覆盖度
+
+**前沿验证器揭示出采样动作中可加以利用的覆盖度。**
+
+我们将固定的 TMAX-9B 生成器与 GPT-5.6 Sol [18] 配对，检验采样动作中是否包含有用的备选。候选覆盖度关注的是采样动作是否包含有用的备选。由于缺少动作级别的真值（ground truth），我们借助强验证器下的轨迹成功率来间接探测它。如图 2 所示，该配置在 $N=4$ 时达到 64.63% Pass@1，在 $N=8$ 时达到 68.03%，表明生成器的动作候选本可支撑可靠程度高得多的轨迹。我们接着追问：自我验证（self-verification）能从中挽回多少机会。
+
+### 4.2 候选宽度与验证
+
+**更多候选无法弥补薄弱的验证。**
+
+在 zero-shot listwise 验证下，把宽度从 $N=4$ 翻倍到 $N=8$，Pass@1 仅从 49.32% 变为 51.02%，Pass@3 从 66.33% 变为 67.35%（图 2）。前沿验证器使用同样的 listwise 机制，却取得了明显更高的成功率（4.1 节）。这一对比表明，较弱的 zero-shot 验证器在一次性比较完整候选集时难以分辨有用的动作，因此仅靠增加候选几乎无益。
+
+**在所评估的机制中，pairwise 验证表现最好。**
+
+在生成器与 $N=8$ 固定的条件下，pointwise 相比 listwise 仅略微提升 Pass@1，Pass@3 保持不变；而 pairwise 达到 54.76% Pass@1 与 71.43% Pass@3（图 2）。
+
+### 4.3 验证器蒸馏
+
+**蒸馏设置。** 前沿验证器的结果揭示出，作为验证器，GPT-5.6 Sol 与生成器模型（TMAX-9B）之间存在显著差距。我们检验监督式蒸馏能否在不在推理时部署前沿模型的前提下迁移这一能力的一部分 [26]。我们使用从 244 个困难 TMAX-15k 任务 [1] 的 732 条轨迹中收集的 117k 条前沿验证器 pairwise 响应，通过 LoRA [27] 训练一个验证器，使其生成 GPT-5.6 Sol 教师的推理、分数与偏好标签。微调得到的 LoRA 仅在验证器上激活，不在生成器上激活。训练数据与优化细节见附录 B.3。
+
+**蒸馏缩小了验证器质量差距。** 如图 2 所示，在 $N=8$ 下，蒸馏使 pairwise 验证的 Pass@1 从 54.76% 升至 57.14%，Pass@3 从 71.43% 升至 75.51%。改进在 $N=4$ 下同样出现：Pass@1 从 54.42% 升至 55.44%，Pass@3 从 68.37% 升至 70.41%。即便是所评估的最强 zero-shot 机制也仍有改进空间：验证器蒸馏在不改变生成器的情况下提升了轨迹成功率。我们接下来考察蒸馏改进了哪些 pairwise 偏好、哪些仍然困难（第 5 节）。
+
+**图 3：验证机制在轨迹成功率与估计解码延迟、验证器输出 token 成本之间进行权衡。** 在 TerminalBench-Lite 上使用 TMAX-9B，Pass@1 对比每次运行的并行化输出 token（左）与验证器总输出 token（右）。虚线连接每种机制内的 $N=4$ 与 $N=8$。三角形表示 $N=8$ 下的 decision-only pairwise 验证。成本估计遵循附录 B.4。
+
+### 4.4 动作扩展与验证的成本
+
+**Pairwise 验证增加可观的解码成本。**
+
+图 3 呈现并行化输出 token（POT，一种总体理想化的解码延迟代理）与验证器总输出 token。左图中，把宽度从 $N=4$ 扩大到 $N=8$ 会增加生成器 POT，因为采样生成越多，其中最长者往往更长。Pairwise 验证还会带来更多验证器解码成本：在 $N=8$ 下，zero-shot pairwise 响应估计增加 26.6k POT，而 listwise 与 pointwise 至多增加 1.3k。右图中，$N=8$ 下的验证器总输出对 listwise 为 0.6k，pointwise 为 7.0k，zero-shot pairwise 验证为 125.7k。
+
+**有效验证可能并不需要推理。**
+
+有效的动作验证是否需要显式生成推理 [24]？参照判别式奖励模型中的直接预测做法 [21, 28]，我们评估只输出 A/B 偏好的 pairwise 验证器（Decision-only 设置），使用 zero-shot 模型或为单 token 响应蒸馏出的模型。在 $N=8$ 下，两个 TMAX-9B decision-only 验证器都较各自的带推理版本提升了 Pass@1，同时把参考定价 token 成本分别降低 20.9%（zero-shot）与 24.1%（蒸馏）（表 8）。在 4B 与 27B 上，所评估的 decision-only 变体估计 token 成本更低，但 Pass@1 也低于各自的带推理版本（表 8）。更多 Pass@3 与 $N=4$ 结果见附录 C.1。
+
+## 5 分析：还有什么在限制验证？
+
+我们利用 21 个留出（held-out）TMAX-15K 任务 [1] 中存储的 TMAX-9B 轨迹（$N=8$），分析蒸馏从 GPT-5.6 Sol 教师那里迁移了什么。我们用这一离线基准在同一状态下比较不同模型的 pairwise 验证输出。这些诊断度量的是在验证上与教师的一致性，而非动作正确性或轨迹成功率。
+
+Pairwise agreement（成对一致率）指验证器与教师的 A/B/TIE 偏好相匹配的比较所占比例。对于 verification agreement（验证一致率），我们对两个模型分别统计每个候选在 pairwise 比较中的获胜情况，再度量二者识别出同一最高排名候选的状态比例。附录 D.1.1 给出计算细节。
+
+### 5.1 蒸馏改进了什么
+
+**蒸馏迁移了前沿验证器的行为。**
+
+在该离线基准上，蒸馏把 pairwise 比较的分数 MAE 从 2.59 降到 1.05，并把 pairwise agreement 从 59.01% 提升到 74.58%（5.1 节）。Verification agreement 从 38.52% 升至 57.79%，表明离线验证所识别的候选在蒸馏后更常与前沿验证器的候选一致。
+
+**表 1：蒸馏提升与前沿验证器的一致性。**
+
+| 验证器 | Score MAE | Pairwise (%) | Verification (%) |
+|---|---|---|---|
+| Zero-shot | 2.59 | 59.01 | 38.52 |
+| Distilled | 1.05 | 74.58 | 57.79 |
+
+**图 4：蒸馏提升了与教师的一致性，但命令推理仍然困难。** (a) 按 episode 回合统计的与前沿验证器的离线验证一致率，使用 1,355 个对两个模型均有有效比较的状态（占全部状态的 83.4%）。(b) 由 GPT-5.6 Terra 判定为明显验证器失败的教师分歧，按类别分组。
+
+### 5.2 仍然存在的验证挑战
+
+**一致性沿整条轨迹改善，但在较后期的状态中仍然较低。**
+
+Verification agreement 在每个回合分箱（turn bin）中都得到改善（图 4 (a)）。其值在第 1-4 回合达到 68.13%，在第 17-32 回合为 54.07%，表明增益延续到开局决策之后，而轨迹后段仍存在大量分歧。
+
+**剩余分歧集中在命令语义与执行可行性上。**
+
+我们使用 GPT-5.6 Terra [18] 复核教师分歧，并用预定义的分类体系（taxonomy）对其判定为明显验证器失败的案例进行归类。如图 4 (b) 所示，此类案例数从 zero-shot 验证的 3,328 个降至蒸馏后的 1,810 个，且每个类别中的案例都有减少。候选语义与执行可行性合计占这些蒸馏验证器案例的 67.4%。这些类别涉及判断命令在当前环境中的效果（附录 D.2），附录 D.3 中的执行轨迹给出了示例。
+
+## 6 动作扩展的组合与迁移
+
+我们现在检验动作验证是否与轨迹扩展互补，以及能否跨模型、harness 与任务迁移。Best-of-$T$ 与 SR 需要全新的环境运行，而在基准之外、缺乏可靠状态序列化（state serialization）时这可能很难做到 [29, 13]。我们检验 Mid-Harness 能否在不增加二者环境运行次数的情况下改进这两种方法。
+
+### 6.1 与轨迹扩展的组合
+
+图 6 在 TMAX-4B、9B 与 27B 上比较动作扩展与轨迹扩展，任务级置信区间见附录 C.4。
+
+**Mid-Harness 改进了并行扩展下的轨迹。**
+
+当 TMAX-9B 同时担任生成器与轨迹验证器时，$T=3$ 的 Best-of-$T$ 达到 55.10% Pass@1。若改用 zero-shot 或蒸馏版 Mid-Harness 来生成这些运行，Pass@1 分别提升至 61.22% 与 66.33%（图 6）。与仅用 Best-of-$T$ 相比，这在同样的三次环境执行下带来 11.23 pp 的增益。
+
+**Mid-Harness 也改进了顺序精炼的轨迹。**
+
+对源轨迹及其精炼都使用蒸馏版 Mid-Harness，将 Pass@1 从基线 SR 的 55.10% 提升到 60.20%，Pass@3 则从 71.43% 升至 75.51%。因此，当轨迹以先前运行的经验为条件时，动作验证依然有用。
+
+**图 5：动作扩展与轨迹扩展的组合。** 在 TerminalBench-Lite 上使用固定 TMAX 生成器的 Pass@1 与 Pass@3（%）。Mid-Harness 使用 pairwise 验证（$N=8$），Best-of-$T$ 使用 $T=3$ 条轨迹，SR 使用 $R=1$ 轮。$-\Delta$ 与 $+\Delta$ 表示相对未做任何扩展的基础智能体的变化。对勾 ✓ 表示启用的组件。# Env. 统计每个返回输出的环境执行次数。Best-of-$T$ 只返回一个输出，因此 Pass@3 未定义。
+
+表头分组说明：Best-of-$T$ 与 SR 属于轨迹层面（Trajectory-level）；Mid-Harness 的 zero-shot 与 distilled 属于动作层面（Action-level）。
+
+| Best-of-$T$ | SR | Mid-Harness（zero-shot） | Mid-Harness（distilled） | 4B Pass@1 | 4B Pass@3 | 9B Pass@1 | 9B Pass@3 | 27B Pass@1 | 27B Pass@3 | # Env. |
+|:---:|:---:|:---:|:---:|---:|---:|---:|---:|---:|---:|---:|
+| × | × | × | × | 38.78 | 57.14 | 50.00 | 69.39 | 71.09 | 82.65 | 1 |
+| ✓ | × | × | × | 34.69 (−4.09) | – | 55.10 (+5.10) | – | 73.47 (+2.38) | – | 3 |
+| × | ✓ | × | × | 41.50 (+2.72) | 57.14 (+0.00) | 55.10 (+5.10) | 71.43 (+2.04) | 72.79 (+1.70) | 84.69 (+2.04) | 2 |
+| × | × | ✓ | × | 41.50 (+2.72) | 57.14 (+0.00) | 54.76 (+4.76) | 71.43 (+2.04) | 73.13 (+2.04) | 84.69 (+2.04) | 1 |
+| ✓ | × | ✓ | × | 39.80 (+1.02) | – | 61.22 (+11.22) | – | 77.55 (+6.46) | – | 3 |
+| × | ✓ | ✓ | × | 44.22 (+5.44) | 59.18 (+2.04) | 56.80 (+6.80) | 73.47 (+4.08) | 74.15 (+3.06) | 82.65 (+0.00) | 2 |
+| × | × | × | ✓ | 43.88 (+5.10) | 58.16 (+1.02) | 57.14 (+7.14) | 75.51 (+6.12) | 76.19 (+5.10) | 86.73 (+4.08) | 1 |
+| ✓ | × | × | ✓ | 46.94 (+8.16) | – | 66.33 (+16.33) | – | 80.61 (+9.52) | – | 3 |
+| × | ✓ | × | ✓ | 46.60 (+7.82) | 62.24 (+5.10) | 60.20 (+10.20) | 75.51 (+6.12) | 75.85 (+4.76) | 85.71 (+3.06) | 2 |
+
+**图 6：组合动作扩展与轨迹扩展改善了成本-成功率权衡。** 在 TerminalBench-Lite 上使用 TMAX-9B，Pass@1 对比每次运行的输出 token、输入 token 与参考定价 token 成本。美元估计采用 OpenRouter Qwen3.5-9B 的每百万输入/输出 token \$0.08/\$0.13 费率 [30]。除图 6 中的设置外，我们还评估了 $T=5,7$ 的 Best-of-$T$ 与 $R=2,3$ 的 SR。
+
+**组合两类扩展轴改善了成本-成功率权衡。**
+
+图 6 在 TMAX-9B 上揭示出三个模式。第一，SR 使用的 token 计算相对较少，但 Pass@1 在 $R=1,2,3$ 下分别停在 55.10%、56.46% 与 55.78% 的平台。第二，$N=8$ 的蒸馏版 Mid-Harness 以约三分之一的参考定价 token 成本达到 $T=5$ Best-of-$T$ 的水平（57.14%）。第三，把它与 SR 组合、或与 $T=3$ 的 Best-of-$T$ 组合，分别达到 60.20% 与 66.33%，二者在更低的参考定价 token 成本下都超过了 $T=7$ 的 Best-of-$T$（59.18%）。因此，相比单纯增加轨迹数量，组合动作扩展与轨迹扩展能以更低的估计 token 成本取得更高的成功率。使用 decision-only 验证器还能把这些组合的总参考定价 token 成本进一步降低 22-24%（附录 C.2）。
+
+### 6.2 跨模型、基准与 harness 的迁移
+
+**动作扩展改进了从 4B 到 27B 的各规模生成器。**
+
+在 4B 上，zero-shot Mid-Harness 把 Pass@1 从 38.78% 提升到 41.50%，蒸馏进一步把它提升到 43.88%。在 27B 上，相应的进程为 71.09%、73.13% 与 76.19%。每个蒸馏验证器都以对应规模所用的生成器骨干（backbone）初始化，而 pairwise 机制保持不变。
+
+**表 2：Mid-Harness 跨基准、模型与 harness 迁移。** 每个任务三次运行的 Pass@1 / Pass@3。SWE-bench-Verified 使用其 Mini 子集（50 个任务），FeatureBench-Mini 使用 23 个 CPU 任务。两种 Mid-Harness 变体均使用 $N=8$ 的 pairwise 验证。绿色下标 $+\Delta$ 表示相对基础智能体的差异。
+
+| 基准 | 模型 | Harness | 基础智能体 | Mid-Harness（Zero-shot） | Mid-Harness（Distilled） |
+|---|---|---|---|---|---|
+| TerminalBench-Lite | Qwen3.5-9B | Terminus-2 | 40.48 / 60.20 | 42.52 (+2.04) / 61.22 (+1.02) | – |
+| TerminalBench-Lite | Nemotron3.5 Lightning | Terminus-2 | 41.16 / 55.10 | 43.20 (+2.04) / 58.16 (+3.06) | – |
+| Terminal-Bench 2.1 | TMAX-9B | Vanillux2 | 21.72 / 25.84 | 27.34 (+5.62) / 35.96 (+10.12) | 26.59 (+4.87) / 35.96 (+10.12) |
+| Terminal-Bench 2.1 | Nemotron3 Ultra | Terminus-2 | 50.94 / 65.17 | 56.18 (+5.24) / 66.29 (+1.12) | – |
+| SWE-bench-Verified | TMAX-9B | Vanillux2 | 46.67 / 54.00 | 48.00 (+1.33) / 58.00 (+4.00) | 48.67 (+2.00) / 62.00 (+8.00) |
+| FeatureBench-Mini | TMAX-9B | Vanillux2 | 1.45 / 4.35 | 5.80 (+4.35) / 17.39 (+13.04) | 7.25 (+5.80) / 13.04 (+8.69) |
+| FeatureBench-Mini | TMAX-27B | Vanillux2 | 17.39 / 26.09 | 17.39 / 34.78 (+8.70) | 23.19 (+5.80) / 39.13 (+13.04) |
+
+**动作扩展在富有挑战性的基准上提升成功率。**
+
+在 Terminal-Bench 2.1 [5] 上，zero-shot 验证把 TMAX-9B 的 Pass@1 从 21.72% 提升到 27.34%（表 2）。FeatureBench-Mini [31] 对 TMAX-9B 尤具挑战：基础智能体仅在 1.45% 的运行中成功，而 zero-shot 与蒸馏验证分别把 Pass@1 提升到 5.80% 与 7.25%。增益延伸到 TMAX-27B：蒸馏验证把 FeatureBench-Mini 的 Pass@1 从 17.39% 提升到 23.19%，Pass@3 从 26.09% 提升到 39.13%。因此，即便在基础智能体很少成功的任务上，动作验证也能提升成功率。两种变体还在 SWE-bench-Verified [4] 上改进了 TMAX-9B。就 TMAX-9B 而言，蒸馏相对 zero-shot 验证提升了 FeatureBench-Mini 的 Pass@1 却降低了 Pass@3，并且在 Terminal-Bench 2.1 上没有超过 zero-shot 验证。
+
+**增益同样出现在其他模型与另一个 harness 上。**
+
+Zero-shot Mid-Harness 使 Nemotron3.5 Lightning（30B）[32] 与 Nemotron3 Ultra（550B）[33] 的两项指标都得到提升，把适用范围扩展到 TMAX 家族之外以及不同模型规模。它还在使用 Terminus-2 [5] 的情况下，改进了未做额外终端专项 RL 的 Qwen3.5-9B。在全部七个设置中，zero-shot Mid-Harness 都提升了 Pass@3，并使 Pass@1 持平或提升。评估细节与任务组分析见附录 B.1 与附录 C.5。
+
+---
+
+## 7 相关工作
+
+**终端智能体中的模型与 harness（驾驭层）。** 已有工作开发了智能体接口 [7, 8]、上下文管理 [34] 以及自动化的 harness 优化 [35]。模型侧的工作利用合成任务扩展监督学习与强化学习 [36, 37, 38, 1, 39]。Mid-Harness 在模型与 harness 固定的条件下研究动作扩展（action scaling）。
+
+**测试时扩展与过程奖励模型。** 测试时计算扩展通过聚合 [40]、验证 [11, 24, 16] 与搜索 [41, 42] 来改进推理任务。过程奖励模型评估中间步骤 [21]，其中包括通过生成式验证 [43, 44]；而 $V_{1}$ 使用成对比较与锦标赛来验证数学与代码解答 [23]。尽管多数工作聚焦于推理任务，我们的工作主要面向智能体任务以及每个动作都会影响环境的动作扩展。
+
+**智能体测试时扩展。** 并行验证 [14, 2] 与顺序改进（sequential refinement）[12, 3] 对完整轨迹进行扩展。LLM-as-a-Verifier 也在 Terminal-Bench 上验证每步候选 [2]。Zainullina et al. [13] 将由训练得到的 critic 进行的动作排序与轨迹选择相结合，用于 SWE 任务。我们则研究以生成器作为验证器的验证机制，覆盖更广泛的终端任务。其他方法评估已完成的补丁 [45, 46]，或在 SWE 任务执行过程中提供反馈 [47]。
+
+## 8 结论
+
+我们在生成器与 harness 固定的条件下研究长程终端智能体的动作扩展。来自同一生成器的有用备选动作可以提升轨迹成功率，但在弱验证下，更宽的采样几乎不带来收益。在所评估的机制中，成对比较表现最佳；而蒸馏前沿模型的响应可在不改变生成器的情况下进一步提升成功率。这些收益可推广至不同的智能体设置；与轨迹扩展组合时，相比仅生成更多轨迹，能以更低的估算 token 成本达到更高的成功率。这些发现确立了动作扩展是测试时计算扩展的一个互补轴。
+
+**局限与未来工作。** 蒸馏与前沿验证之间仍存在显著差距，这促使研究更好的训练算法，例如面向验证器的强化学习 [23]。我们的评估缺乏金标准动作标签，限制了对验证正确性与候选覆盖率的直接测量。附录 A 详细讨论了这些局限与未来方向。
+
+### AI 使用声明
+
+在本工作中，我们使用生成式 AI 工具来生成合成数据集、实现方法、设计研究方法或实验并为其提供反馈、支持定性与主题数据分析，以及协助翻译。我们没有使用生成式 AI 工具来提出或改进假设、清洗或重新格式化数据集，或解释结果。以下用途不适用于本工作：帮助开发理论模型或概念框架、表述数学论断、为证明数学论断提供关键要素，以及协助撰写证明。此外，我们使用生成式 AI 工具创建或修改科学图表或图像，并对研究论文进行编辑以提升可读性。我们审阅了所有 AI 辅助的工作。LLM 生成的代码由两位作者进行了正确性检查与测试。我们对本工作的最终内容负责，包括在生成式 AI 辅助下产出的文本、论断与产物。
+
+### 伦理声明
+
+我们的实验在隔离的基准环境中评估终端智能体。本文研究的动作可靠性涉及任务能否成功完成，并不确立所生成命令的安全（safety）或安全（security）保障。终端智能体能力的提升可能有利于合法的自动化，但也可能便利有害活动。因此，部署时应保留诸如受限权限、环境隔离以及对敏感或不可逆动作的人工审批等保障措施。动作验证应当与这些保障措施互补，而非取代它们。
+
+### 可复现性声明
+
+我们在附录 B.2 中记录验证机制、提示词与运行设置，在附录 B.3 中记录蒸馏数据构建与训练配置。附录 B.1 说明评估任务、指标、基线流程与超时设置。推理成本计算在附录 B.4 中描述，附录 D.1 与附录 D.2 则详细介绍离线一致性分析与分歧归类。
+
+## 附录 A 局限与未来工作
+
+### 改进验证器训练
+
+在 TerminalBench-Lite 上使用相同的 TMAX-9B 生成器与八个候选时，蒸馏得到的验证器达到 57.14% Pass@1，而前沿验证为 68.03%（图 2）。我们的蒸馏方法迁移了前沿验证器的部分能力，但并未确立如何弥合这一差距。在所复核的验证器失败案例中，命令语义与执行可行性占主导，而教师一致性在较后期的状态下仍然较低（图 4）。这些发现提示应从观测到的命令执行结果中学习，并改进验证器表征任务进度、未解决需求与相关历史的方式。未来工作可以使用世界模型来预测动作效果 [48]，或仿照 $V_{1}$ [23]，通过强化学习联合训练生成与验证，使验证器适应生成器不断演化的动作分布。
+
+### 评估动作验证
+
+我们的评估缺乏金标准动作标签，限制了对验证正确性、候选覆盖率以及在完美验证下可达到的轨迹成功率的直接测量。数学推理受益于步骤级标注与过程奖励模型 [21, 28, 49]，但为终端动作收集可比的证据需要考虑其对环境的影响。与可以复用已采样输出的响应验证或轨迹验证 [16, 10, 44, 2] 不同，改变一个已执行的动作会改变后续状态与候选集合。因此，我们的在线比较需要新的环境运行，而对固定轨迹集合的重新评估无法确立在不同验证器下的性能。从中间状态分支可以支持更丰富的评估以及树搜索或束搜索，但需要环境克隆或恢复 [41, 50]。
+
+### 分配推理计算
+
+我们保持生成器的推理设置固定，未将动作扩展与为单一候选增大推理力度（reasoning effort）进行比较 [51]。具有可控推理力度的生成器可以在可比的推理成本下进行比较，并检验这些分配方式是否互补。我们所评估的配置还在每个动作步骤都进行采样与验证，如何以更少的计算保留其收益仍属未决问题。受自适应逐步扩展（adaptive stepwise scaling）[52] 的启发，自适应验证可以在不同步骤之间改变候选宽度与比较力度。通过分类头或单 token 响应进行直接预测——如过程奖励模型 [21] 以及 Jev [53] 等面向决策的模型——提供了一条减少验证器解码量的途径。在 $N=8$ 时，仅决策验证提升了 TMAX-9B 的 Pass@1，但在 4B 与 27B 规模下，其 Pass@1 相对基于推理的验证有所降低（表 7）。因此，其更低的参考价格 token 成本可能伴随性能上的权衡，尽管缺失的用量记录与分开的实时运行限制了该比较能在多大程度上精确隔离响应格式的影响（表 8）。
+
+### 超越本研究的扩展
+
+本研究聚焦于终端智能体以及基于 TMAX 模型的监督式验证器蒸馏。验证器还可能受益于在相关设定中研究过的训练方法，例如推理、智能体与视觉-语言模型蒸馏 [54, 55, 56, 57, 58, 59, 60]、自蒸馏 [61]，以及强化学习与基于搜索的训练 [62, 63, 64, 65, 66, 67, 68]。工具与外部知识 [69, 70, 71, 72, 73]，以及管理上下文、记忆与多轮交互的技术 [74, 75, 76, 77, 78, 79, 80, 81]，可以进一步启发验证；验证器给出的理由（rationale）反过来也可以作为用于改进的反馈 [82]。高效模型设计与适配方面的进展 [83, 84, 85, 86, 87, 88, 89] 可能带来更紧凑的验证器；因果与鲁棒性分析 [90, 91, 92, 93, 94, 95] 则有助于刻画任务成功之外的验证器行为。未来工作可以检验 Mid-Harness 能否改进计算机使用 [96, 97] 与机器人 [98, 99, 100] 领域的智能体。
+
+### B.1 评估与基线流程
+
+**TerminalBench-Lite.** TerminalBench-Lite [17] 包含 100 个终端任务，这些任务经过校准，可在软件工程、数据处理、安全与科学计算等多样化领域上进行高效评估。由于沙箱服务错误，我们排除 network-log-normalization 与 okhttp-trailers-crash 两个任务，留下 98 个评估任务。
+
+**Terminal-Bench 2.1.** Terminal-Bench [5] 在终端环境中用真实任务评估智能体，提供任务专属的环境与可执行测试。我们评估 2.1 版本中的全部 89 个任务；该版本是对 Terminal-Bench 2.0 的修订，修正了任务中的问题。
+
+**SWE-bench Verified Mini.** SWE-bench [4] 评估解决真实 GitHub issue 的仓库级代码修改。我们在 TMAX-9B 与 Vanillux2 上使用 SWE-bench Verified 的 50 任务 Mini 子集²（https://github.com/mariushobbhahn/SWEBench-verified-mini）。
+
+**FeatureBench-Mini.** FeatureBench [31] 评估软件仓库中的端到端功能开发，其任务可能横跨多个提交（commit）与拉取请求（pull request）。我们使用 FeatureBench-Mini 的 23 任务纯 CPU 子集（排除依赖 GPU 的任务），并用 Vanillux2 评估 TMAX-9B 与 TMAX-27B。两个 Mid-Harness 变体均使用 $N=8$、$K=4$ 的成对验证。
+
+**评估指标.** 我们对每个任务评估三次运行。对于 $M$ 个任务，令 $z_{ij}=\mathbf{1}[R(\tau_{ij})=1]$ 表示任务 $i$ 上第 $j$ 次运行是否完全成功。则
+
+$$\mathrm{Pass@1}=\frac{1}{3M}\sum_{i=1}^{M}\sum_{j=1}^{3}z_{ij},\qquad \mathrm{Pass@3}=\frac{1}{M}\sum_{i=1}^{M}\max_{j\in\{1,2,3\}}z_{ij}. \tag{2}$$
+
+失败仍保留在分母中，且分数形式的奖励不计为成功。
+
+**超时设置.** 所有实验均将智能体超时乘数设为 3，以减少由本地服务化部署相比商业 API 生成更慢而导致的超时。
+
+**并行轨迹扩展.** Best-of-$T$ 使用对应的 TMAX 基础模型比较 $T$ 条已完成的轨迹，并为每个任务返回一个输出。若 $\hat{j}_i$ 是被返回轨迹的索引，则其 Pass@1 为 $\sum_{i} z_{i\hat{j}_i}/M$。我们在图 6 中使用 $T=3$，并在图 6 中对 TMAX-9B 额外评估 $T=5,7$。9B 轨迹验证器使用 1 个枢轴（pivot）、2 次重复、温度 1、关闭思考模式以及 4,096 token 的输出上限。对于组合实验，Mid-Harness 在轨迹验证之前生成每条源轨迹。
+
+**顺序轨迹扩展.** 顺序改进（Sequential Refine, SR）遵循 Kim et al. [12]，使用对应的 TMAX 模型将每条源轨迹总结为五个字段，然后在全新初始化的环境中利用该总结开始一次新的运行。总结模型使用 256K 上下文以容纳较长的交互历史。我们在图 6 中使用一轮改进，并在图 6 中评估 $R=1,2,3$。对于组合实验，蒸馏版 Mid-Harness 同时应用于源运行与改进运行。每轮改进为每个任务产生三次运行。
+
+**迁移配置.** Terminal-Bench 2.1 上的 TMAX-9B 实验使用 Vanillux2。两个 Mid-Harness 变体均使用 $N=8$、$K=4$ 的成对验证，65,536 token 的生成器上下文、61,440 token 的验证器上下文以及 2,048 token 的验证器输出上限。Terminus-2 实验在 TerminalBench-Lite 上评估 Qwen3.5-9B 与 Nemotron3.5 Lightning（30B），在 Terminal-Bench 2.1 上评估 Nemotron3 Ultra（550B）。这些实验将基础智能体与每步使用 8 个动作候选的零样本 Mid-Harness 进行比较。Nemotron 生成器使用温度 1.0、top-$p$ 0.95、开启思考模式、65,536 token 上下文与 16,384 token 输出上限。其验证器使用相应主干模型，关闭思考模式、温度 0、61,440 token 上下文与 2,048 token 输出上限。
+
+### B.2 验证机制与超参数
+
+**各机制细节.** 逐点（pointwise）验证对每个候选独立打分并返回得分最高的动作。列表式（listwise）验证呈现完整候选集并返回一个选择。成对（pairwise）验证比较两个动作，返回偏好及两者的分数，并使用边际加权胜率聚合偏好。主要的机制比较使用一次列表式验证器调用以及表 3 中的成对配置。完整的提示词模板与输出格式见附录 B.6。
+
+**首个可运行方法.** 图 2 中的首个可运行（first-runnable）方法从同一历史采样 $N$ 个候选动作，并按候选顺序执行第一个通过工具解析的候选。工具解析出错的候选被跳过；没有任何验证器对可解析动作进行比较或排序。该诊断实验在不使用基于模型验证的情况下测试候选采样。
+
+**候选与锦标赛结构.** 在 $N=4$ 时，完全成对验证在一个并行阶段比较所有无序对，即对四个互异的有效候选进行六次比较。在 $N=8$ 时，我们使用环（ring），随后是带 $K=4$ 个枢轴（pivot）的枢轴阶段 [2]。若候选的工具调用能成功解析，则该候选有效。工具名称与参数完全相同的候选会被去重并保留首次出现者。若没有任何候选有效，则返回第一个采样到的候选；若只剩一个互异的有效候选，则不经验证直接返回该候选。设 $M$ 为剩余候选数量。
+
+**环与枢轴比较.** 我们遵循 Kwok et al. [2] 提出的枢轴锦标赛方法。带种子的洗牌将 $M$ 个候选排成一个环；相邻候选（包括最后一个与第一个）被并行比较。这些比较完成后，候选按其归一化的环分数排序，平局由种子优先级打破。得分最高的 $K'=\min(K,M)$ 个候选成为枢轴。枢轴阶段将每个非枢轴候选与每个枢轴比较，并对枢轴之间的每个无序对进行比较，每次比较采用带种子的随机 A/B 朝向。已在环中排定的对无论朝向如何都会被移除。因此，重叠的环-枢轴对不会被再次调用，每条已有的环记录在最终聚合中也只计入一次。其余枢轴比较在枢轴选定后并行运行，因此环与枢轴构成两个顺序阶段。对于八个互异候选与四个枢轴，这会产生 22–25 次比较，具体取决于枢轴在环中的位置。
+
+**边际加权胜率.** 默认的成对验证器返回一个理由（rationale）、两个 1 到 10 的整数分数以及 A/B/TIE 偏好。每个有效比较 $e$ 的权重为
+
+$$w_{e}=\max\left(\frac{|s_{A,e}-s_{B,e}|}{9},\,0.1\right),\qquad q_{i}=\frac{\sum_{e\in E_{i}}w_{e}\,p_{i,e}}{\sum_{e\in E_{i}}w_{e}}, \tag{3}$$
+
+其中 $E_{i}$ 包含涉及候选 $i$ 的有效比较，$p_{i,e}$ 在获胜时为 1、失败时为 0、平局时为 $1/2$。若偏好与不相等的分数相矛盾，则该响应无效；分数相等时，则允许 A/B 偏好或平局。例如，分数为 6 和 6 且胜者为 B 时，B 获得一次权重为 0.1 的获胜，而不是丢弃该偏好。归一化用于处理不同候选所参与比较数量不同的情况。最终分数的平局先按环分数、再按种子优先级打破；完整锦标赛直接使用种子优先级。环洗牌与枢轴朝向共享同一个带种子的随机流，而平局优先级使用由同一决策种子派生的单独随机流。
+
+**无效响应与回退.** 无效或不可用的判定会同时从分子与分母中排除，而不是计为平局。若任一候选没有任何有效的关联环比较，控制器将返回第一个被保留的候选；否则，失败的枢轴比较会被略去，最终排序使用其余有效证据。
+
+表 3：TMAX-9B 默认成对验证的运行设置。
+
+| 设置 | $N=4$ | $N=8$ |
+|---|---|---|
+| 生成器 | TMAX-9B | TMAX-9B |
+| 生成器思考模式 / 温度 | 开 / 0.8 | 开 / 0.8 |
+| 最大智能体步数 | 64 | 64 |
+| 生成器上下文 / 输出上限 | 65,536 / 16,384 | 65,536 / 16,384 |
+| 验证器 | TMAX-9B，零样本或蒸馏（两列合并） | |
+| 验证器思考模式 / 温度 | 关 / 0 | 关 / 0 |
+| 验证器上下文 / 输出上限 | 61,440 / 2,048 | 61,440 / 2,048 |
+| 成对锦标赛 | 最多 6 个互异对 | 环 + 4 枢轴 [2] |
+
+**历史长度限制与前沿验证.** 在 Terminal-Bench 2.1 上，对于零样本 $N=4$ 配置与两个 TMAX-9B Mid-Harness 配置，提供给验证器的历史被截断至 8,000 字符。前沿 $N=4$ 参照则使用一次列表式验证器调用、温度 1.0 与 4,096 token 输出上限。$N=8$ 前沿参照同样使用一次列表式验证器调用。
+
+**仅决策成对验证.** 每次比较只输出一个 A/B token。设 $\ell_{A,e}$ 与 $\ell_{B,e}$ 为比较 $e$ 在首个输出位置上 token A 与 token B 的对数概率。我们在这两个 token 上归一化概率，并用平均偏好概率为每个候选打分：
+
+$$p_{A,e}=\frac{\exp(\ell_{A,e})}{\exp(\ell_{A,e})+\exp(\ell_{B,e})},\qquad p_{B,e}=1-p_{A,e},\qquad q_{i}=\frac{1}{|E_{i}|}\sum_{e\in E_{i}}p_{i,e}, \tag{4}$$
+
+其中 $E_{i}$ 包含涉及候选 $i$ 的有效比较，$p_{i,e}$ 按其 A/B 位置取值。环上的均值确定枢轴，所有环-枢轴比较上的均值确定最终排序，平局先按环分数、再按种子优先级打破。失败的比较被排除，且不使用分数边际加权。
+
+### B.3 验证器训练数据与设置
+
+对于验证器蒸馏，GPT-5.6 Sol 为每个比较对生成比较理由，随后给出分数与偏好标签。监督数据采集自从 TMAX-15k 中抽取的困难任务，每个任务由 TMAX-9B 生成三条轨迹。每条轨迹平均约含 20 个步骤，中间状态会提供多个验证器输入。经过过滤与平衡后，最终确定的成对验证语料保留 244 个训练任务与 21 个留出（held-out）分析任务，分别对应 117,631 与 10,543 个验证器输入。分析任务与训练任务不相交，仅用于第 5 节的最终分析，不用于检查点选择或训练配置。在每个划分内部，确定性的多数类下采样平衡了所展示的 A/B 胜者（种子 42），并保留全部 TIE 样本。这为训练产生 56,274 个 A 样本与 56,274 个 B 样本，外加 5,083 个 TIE 样本；分析划分包含 5,019 个 A、5,019 个 B 与 505 个 TIE 样本。
+
+图 6 中 TMAX-4B 与 TMAX-27B 的验证器蒸馏使用同一训练数据集。
+
+表 4：成对验证器蒸馏设置。
+
+| 设置 | 值 |
+|---|---|
+| LoRA rank / alpha | 64 / 128 |
+| LoRA dropout | 0.05 |
+| 学习率 | $10^{-4}$ |
+| 训练轮数（epochs） | 2 |
+| 每设备批量大小 | 8 |
+| 梯度累积 | 1 |
+| 训练设备 | 4 张 H200 GPU |
+
+表 4 总结了训练超参数。在主要蒸馏比较中，动作生成器保持为 Base TMAX-9B。适配器作用于主干的注意力、MLP 以及状态空间的输入与输出投影模块。
+
+**仅决策蒸馏.** 我们使用单独生成的仅含 A/B 的教师语料，保留胜者并移除教师的推理内容。该语料包含 113,728 个训练样本与 10,188 个开发样本，每个划分在 A 与 B 之间保持平衡。TIE 标签被数据过滤器排除，并在转换过程中被拒收，而不是映射为 A/B。相对于带显式推理的验证，该变体改变了响应格式、聚合方式与训练目标。
+
+### B.4 推理成本核算
+
+**验证器输入长度.** 图 7 展示了在 TerminalBench-Lite 上、$N=8$、$K=4$ 时使用 TMAX-9B 的蒸馏成对验证器的输入 token 分布。中位数为 6,495 token，第 90 百分位为 10,380 token，而配置的输入上限为 61,440 token。过长的输入通常源于较长的动作候选。
+
+图 7：成对验证器输入长度。基于 98 个 TerminalBench-Lite 任务上 294 次运行中所有带 token 用量记录的验证器调用的分布，使用 $N=8$、$K=4$ 的蒸馏 TMAX-9B 验证器。竖线标出中位数与第 90 百分位。
+
+**并行化输出 token.** 设 $c_{t,i}$ 为步骤 $t$ 处候选 $i$ 的输出长度，$v_{t,s,j}$ 为顺序阶段 $s$ 中第 $j$ 次验证器调用的输出长度。并行化输出 token（POT）将每个并行阶段中的最长输出求和：
+
+$$\mathrm{POT}=\sum_{t}\left[\max_{i}c_{t,i}+\sum_{s}\max_{j}v_{t,s,j}\right]. \tag{5}$$
+
+逐点比较与 $N=4$ 的完全锦标赛各自构成一个并行验证器阶段。对于 $N=8$ 的成对验证，由于环决定枢轴，环与枢轴比较构成两个顺序阶段，因此将两者的最大输出长度相加。
+
+**验证器总输出.** 图 3 的右图对所有已执行的验证器调用的输出长度求和，不取并行阶段的最大值。因此它度量的是验证器的总输出 token 成本，而 POT 同时包含生成器与验证器的解码。我们对每次运行分别计算这两个指标，并在包括失败在内的全部 294 次运行上取平均。
+
+**参考价格 token 成本.** 图 6 与图 9 统计了产生一个最终输出的完整流水线中生成器与验证器的输入和输出 token。对 $N=4$ 与 $N=8$，我们均假设同一动作步骤内生成器 prefill 共享：公共提示词只计一次，并对所有候选的输出 token 求和。输入不在相继步骤或不同轨迹之间共享，验证器输入按每次已执行的比较计入。Best-of-$T$ 包含全部 $T$ 条源轨迹及轨迹验证。SR 包含源轨迹、总结以及直到第 $R$ 轮的改进运行。对于它们与 Mid-Harness 的组合，动作验证 token 计入每一次源运行与改进运行。参考价格 token 成本为 $(0.08I+0.13O)/10^{6}$ 美元，其中 $I$ 与 $O$ 为总输入与输出 token，该费率为图 6 中使用的 Qwen3.5-9B 参考价格。对 TMAX-4B，我们将 9B 的输入与输出费率乘以 $4/9$；对 TMAX-27B，我们使用每百万输入 token 0.30 美元、每百万输出 token 2.00 美元。这些固定费率作为本地部署模型的代理。对每个模型，我们将其输入 token 费率应用于所有计入的输入 token，不附加缓存折扣。
+
+### B.5 评估开销
+
+每次终端智能体试验都需要一个全新的 Docker 环境，以及一系列与命令执行交错的模型调用，因此额外的重复意味着重复整段交互轨迹。Mid-Harness 还会在每个动作步骤生成多个候选与验证器响应。Terminal-Bench [101] 报告执行时间、模型调用次数与 token 用量，部分试验可持续长达两小时并涉及数百次模型调用。它还报告带 95% 置信区间的解决率，并对每种受支持的智能体-模型组合至少评估五次。我们的评估对所研究的各配置均采用每任务三次运行。重复交互执行的成本限制了进一步的重复实验，这促使我们在报告观测到的性能提升的同时显式报告不确定性。
+
+图 8：终端智能体评估需要大量顺序步骤与可观的执行时间。TMAX-9B 配合 Vanillux2、$N=1$ 时任务级的平均步数与智能体执行时间，在每个基准与子图内独立排序。每个任务取三次运行的平均。
+
+图 8 在加入候选采样或验证之前度量了这一开销，使用了 98 个 TerminalBench-Lite 任务与全部 89 个 Terminal-Bench 2.1 任务。就任务均值而言，两个基准的步数中位数分别为 21.0 与 28.3，智能体执行时间中位数分别为 7.2 与 10.5 分钟。第 90 百分位时间分别达到 13.3 与 20.0 分钟，Terminal-Bench 2.1 中最长的任务均值达到 60 分钟。步数统计的是记录在案的智能体回合（episode）。执行时间不包含环境搭建与最终评估。超时的运行保留其观测到的时长，因此这些时长并不度量成功完成所需的时间。这些测量描述的是我们的智能体与服务化部署设置，而非基准本身的固有耗时。
+
+### B.6 验证器提示词模板
+
+以下代码块将每种验证机制的验证器指令与任务输入模板合并为一个提示词。花括号括起的字段在推理时由任务、已执行历史、终端状态与候选动作填充。
+
+#### B.6.1 列表式验证（Listwise Verification）
+
+```text
+You are a strict action selector for an autonomous agent solving a command-line task. You are given the ORIGINAL task (the ground truth — do not trust any drifted summary), the commands ALREADY EXECUTED so far, the current terminal state, and several CANDIDATE next-actions produced by the agent. The candidates are anonymized and shuffled.
+
+Pick the SINGLE candidate that best makes correct progress toward fully completing the ORIGINAL task. Judge on:
+
+- correctness & expected effect of the commands on the current state,
+- progress toward the goal without going off-objective or violating any "do NOT" constraints in the task,
+- NOT prematurely declaring the task complete when work clearly remains (reject lazy "good enough" finishes),
+- avoiding repeating an action already in the executed-command history, especially one that did not change the state or previously failed.
+
+A candidate's rendering may contain a marker like "[... N chars hidden for DISPLAY ONLY ...]". That is a display-shortening artifact, NOT a sign that the action is incomplete or malformed — every candidate shown is a complete, runnable action. Judge candidates on their intent and correctness; never reject one merely because its rendering was shortened.
+
+Respond with ONLY a JSON object with the reason field first:
+
+{"reason": "<=30 words", "best": "<letter>"}
+
+Guidelines:
+
+- act as a search controller, loop breaker, and finalization driver, not only as a local plausibility judge,
+- prefer candidates that shrink the remaining search space or change the state toward completion over candidates that only produce more observations,
+- if recent history shows repeated inspection, broad file reading, repeated test runs, repeated waits, repeated server status checks, or repeated package installs without a new state change, penalize more of the same,
+- use inspection / debugging only when it resolves a specific unknown needed for the next fix; otherwise prefer a concrete fix, a minimal targeted test, or completion,
+- if required artifacts exist and recent evidence supports the ORIGINAL task requirements, prefer finalization over additional broad verification,
+- reject completion when required artifacts are missing, recent tests fail, or the candidate relies on unsupported assumptions,
+- prefer the smallest action that either fixes a known blocker, verifies a specific requirement, or safely completes the task,
+- treat dependency installs, environment rebuilds, waits, restarts, and status checks as no-progress unless the current state shows they are the specific blocker.
+
+## ORIGINAL TASK (ground truth)
+
+{goal}
+
+{history_section}
+
+## CURRENT TERMINAL STATE
+
+{state}
+
+## CANDIDATE NEXT-ACTIONS
+
+{candidates}
+
+Return ONLY the JSON object choosing the best candidate letter.
+```
+
+#### B.6.2 逐点验证（Pointwise Verification）
+
+```text
+You are a strict generative action-value evaluator for an autonomous agent solving a command-line task. Evaluate ONE candidate next-action independently, without assuming that it is better or worse than unseen alternatives.
+
+Predict the action's likely effect from the current terminal state and executed history. Judge whether it makes concrete progress toward the ORIGINAL task, its risk of damaging or drifting from the solution, whether it repeats prior no-progress work, and whether it fits the current phase of work. Reject premature completion unless existing evidence supports every material requirement.
+
+Score ABSOLUTE expected value over doing nothing, not mere plausibility. First simulate the command's concrete next state, including likely errors and unchanged artifacts. Then identify what task requirement remains unresolved. Do not infer progress from analysis text that the actual command does not implement.
+
+Assign an integer score from 0 to 10 using these strict anchors:
+
+0: invalid, destructive, or directly contradicts the task,
+
+1-2: off-target, repeats failed work, or likely leaves the state unchanged,
+
+3-4: marginal information or cleanup without resolving a current blocker,
+
+5-6: useful, necessary progress but substantial work or uncertainty remains,
+
+7-8: strong concrete progress that resolves a known blocker with limited risk,
+
+9: near-decisive progress with direct evidence that the action should work,
+
+10: reserve for a clearly correct decisive action, or safe completion supported by evidence for every material requirement.
+
+Calibration rules:
+
+- cap repeated restarts, rewrites, tests, waits, or installs at 3 unless new state evidence makes this repetition necessary,
+- cap unsupported completion at 2,
+- an action that merely prepares for future work is normally at most 5,
+- uncertainty lowers the score; never award 8-10 just because an action is plausible or well explained.
+
+Respond with ONLY this JSON object, with reason first:
+
+{"reason": "<=30 words", "predicted_next_state": "<=40 words", "score": <integer 0-10>}
+
+Guidelines:
+
+- evaluate whether this single action would act as a search controller, loop breaker, or finalization driver at the current state,
+- reward a concrete reduction in remaining search space; do not reward an observation unless it resolves a specific unknown required for the next fix,
+- score repeated inspection, broad file reading, tests, waits, status checks, or dependency installs as no-progress when recent history shows no new state change,
+- reward a minimal targeted fix or test only when it addresses a known blocker,
+- score finalization highly only when current artifacts and recent evidence support the ORIGINAL task; otherwise treat it as premature,
+- judge the actual command and its likely next state, not the confidence or detail of the accompanying explanation.
+
+## ORIGINAL TASK (ground truth)
+
+{goal}
+
+{history_section}
+
+## CURRENT TERMINAL STATE
+
+{state}
+
+## CANDIDATE NEXT-ACTION
+
+{candidate}
+
+Evaluate only this candidate. Return ONLY the required JSON object.
+```
+
+#### B.6.3 成对验证（Pairwise Verification）
+
+```text
+You are a strict pairwise action verifier for an autonomous agent solving a command-line task. Compare exactly TWO candidate next-actions from the same current state. Score both actions and select the one with greater expected progress toward fully completing the ORIGINAL task.
+
+Produce a compact, structured proof of the comparison rather than free-form chain-of-thought. The `reasoning` value must be ONE plain string, not an object, array, or nested JSON. It must contain concrete, candidate-grounded information. Do not repeat the task, praise style, or use generic claims such as "more robust" without naming the relevant effect, evidence, or failure mode.
+
+Within that single string, reason in this exact logical order: 1) Requirement: identify the one unresolved requirement that most separates the actions. 2) Evidence: cite relevant history or terminal-state evidence. 3) A: predict candidate A's next-state effect and most important failure risk. 4) B: do the same for candidate B. 5) Contrast: state the causal reason one action outranks the other. Keep these steps in the prose; do not create additional JSON keys.
+
+Use 1-10 integer scores with common anchors:
+
+1: invalid, destructive, or directly contradicts the task,
+
+2-3: off-target, repeated no-progress work, or likely unchanged state,
+
+4-5: limited information or preparatory progress with major work remaining,
+
+6-7: useful concrete progress, but with material uncertainty or incompleteness,
+
+8-9: strong, low-risk progress that resolves a known blocker,
+
+10: clearly correct decisive action, or fully evidenced safe completion.
+
+The higher score must win whenever the scores differ. When the integer scores are equal, use TIE for truly indistinguishable actions; A or B may express a slight, explicitly reasoned preference that falls within the same score anchor. A display-shortening marker does not make an action incomplete. Judge actual commands, not confident analysis text.
+
+Each reasoning string must be substantive but concise. The complete reasoning must contain 45-160 lexical tokens. Respond with ONLY this JSON object in the shown field order:
+
+{"reasoning": "45-160 tokens covering steps 1-5 in order", "scores": {"A": <integer 1-10>, "B": <integer 1-10>}, "winner": "A or B or TIE"}
+
+Guidelines:
+
+- act as a search controller, loop breaker, and finalization driver, not only as a local plausibility judge,
+- prefer candidates that shrink the remaining search space or change the state toward completion over candidates that only produce more observations,
+- if recent history shows repeated inspection, broad file reading, repeated test runs, repeated waits, repeated server status checks, or repeated package installs without a new state change, penalize more of the same,
+- use inspection / debugging only when it resolves a specific unknown needed for the next fix; otherwise prefer a concrete fix, a minimal targeted test, or completion,
+- if required artifacts exist and recent evidence supports the ORIGINAL task requirements, prefer finalization over additional broad verification,
+- reject completion when required artifacts are missing, recent tests fail, or the candidate relies on unsupported assumptions,
+- prefer the smallest action that either fixes a known blocker, verifies a specific requirement, or safely completes the task,
+- treat dependency installs, environment rebuilds, waits, restarts, and status checks as no-progress unless the current state shows they are the specific blocker.
+
+## ORIGINAL TASK (ground truth)
+
+{goal}
+
+{history_section}
+
+## CURRENT TERMINAL STATE
+
+{state}
+
+## CANDIDATE A
+
+{candidate_a}
+
+## CANDIDATE B
+
+{candidate_b}
+
+Compare the likely next states and return ONLY the required JSON object.
+```
+
+---
+
+## 附录 C 补充实验与结果
+
+### C.1 数值性能结果
+
+仅决策（decision-only）的聚合与训练方式在附录 B.2 与附录 B.3 中说明。前两个表以百分比、保留两位小数的形式，报告同一组 98 个 TerminalBench-Lite 任务上 TMAX-9B 性能图所对应的 Pass@1 与 Pass@3。表 5 给出图 2 与图 3 中的动作缩放结果。表 6 给出图 5 (b) 与图 6 中的轨迹缩放结果。
+
+表 5：主图背后的动作缩放性能。零样本（zero-shot）验证器使用 TMAX-9B。前沿（frontier）验证器为 GPT-5.6 Sol。
+
+| 验证器 / 配置 | N | Pass@1 | Pass@3 |
+| --- | --- | --- | --- |
+| 基础智能体（Base agent） | 1 | 50.00 | 69.39 |
+| 首个可运行代理（first-runnable proxy） | 8 | 49.66 | 66.33 |
+| 零样本列表式（listwise） | 4 | 49.32 | 66.33 |
+| 零样本列表式 | 8 | 51.02 | 67.35 |
+| 零样本逐点（pointwise） | 4 | 52.72 | 68.37 |
+| 零样本逐点 | 8 | 52.38 | 67.35 |
+| 零样本成对（pairwise） | 4 | 54.42 | 68.37 |
+| 零样本成对 | 8 | 54.76 | 71.43 |
+| 蒸馏成对 | 4 | 55.44 | 70.41 |
+| 蒸馏成对 | 8 | 57.14 | 75.51 |
+| 前沿列表式 | 4 | 64.63 | 76.53 |
+| 前沿列表式 | 8 | 68.03 | 80.61 |
+| 零样本仅决策成对 | 4 | 52.72 | 68.37 |
+| 零样本仅决策成对 | 8 | 56.12 | 73.47 |
+| 蒸馏仅决策成对 | 4 | 54.42 | 71.43 |
+| 蒸馏仅决策成对 | 8 | 59.18 | 73.47 |
+
+**跨候选宽度的仅决策性能。**
+
+在 N=4 时，两种仅决策变体的 Pass@1 均低于其生成推理（reasoning）的对应变体（表 5），因此 N=8 时观察到的更高成功率并不能同时推广到两种宽度。
+
+表 6：主图背后的轨迹缩放与组合性能。Mid-Harness（harness，即「驾驭层」）使用 N=8 的蒸馏成对验证。Best-of-T 对每个任务只返回一个输出，因此 Pass@3 无定义，显示为 –。
+
+| 配置 | Pass@1 | Pass@3 |
+| --- | --- | --- |
+| 基础智能体 | 50.00 | 69.39 |
+| Best-of-T（T=3） | 55.10 | – |
+| Best-of-T（T=5） | 57.14 | – |
+| Best-of-T（T=7） | 59.18 | – |
+| SR（R=1） | 55.10 | 71.43 |
+| SR（R=2） | 56.46 | 70.41 |
+| SR（R=3） | 55.78 | 71.43 |
+| Mid-Harness | 57.14 | 75.51 |
+| Mid-Harness + Best-of-T（T=3） | 66.33 | – |
+| Mid-Harness + SR（R=1） | 60.20 | 75.51 |
+
+表 7：N=8、K=4 时仅决策与基于推理的成对验证对比。TerminalBench-Lite 上的 Pass@1 与 oracle Pass@3（%）。箭头表示推理 → 仅决策，Δ 为仅决策减去推理的百分点差。
+
+| 生成器 | 验证器 | Pass@1（推理 → 仅决策） | Δ | Pass@3（推理 → 仅决策） | Δ |
+| --- | --- | --- | --- | --- | --- |
+| TMAX-4B | 零样本 | 41.50 → 38.10 | −3.40 | 57.14 → 50.00 | −7.14 |
+| TMAX-4B | 蒸馏 | 43.88 → 41.50 | −2.38 | 58.16 → 57.14 | −1.02 |
+| TMAX-9B | 零样本 | 54.76 → 56.12 | +1.36 | 71.43 → 73.47 | +2.04 |
+| TMAX-9B | 蒸馏 | 57.14 → 59.18 | +2.04 | 75.51 → 73.47 | −2.04 |
+| TMAX-27B | 零样本 | 73.13 → 71.77 | −1.36 | 84.69 → 83.67 | −1.02 |
+| TMAX-27B | 蒸馏 | 76.19 → 74.15 | −2.04 | 86.73 → 83.67 | −3.06 |
+
+### C.2 使用仅决策验证的端到端成本
+
+图 9：仅决策动作缩放及其与轨迹缩放的组合。在 TerminalBench-Lite 上使用 TMAX-9B 时，Pass@1 相对总输出 token 数、输入 token 数与参考定价（reference-priced）token 成本的变化。所有 Mid-Harness 数据点均使用仅决策动作验证。组合使用 N=8 的蒸馏验证器。成本包含完整流水线，采用附录 B.4 中的核算方式与费率。
+
+**仅决策验证降低了端到端成本。**
+
+图 9 报告了仅决策动作缩放及其与轨迹缩放组合的总输入与输出成本，扩展了第 4.4 节的分析。相对于带显式推理的验证，在 N=8 时，零样本 Mid-Harness 的总输出 token 减少 62.8%，蒸馏 Mid-Harness 减少 44.7%。计入输入 token 后，参考定价成本分别下降 20.9% 与 24.1%，同时观察到的 Pass@1 上升（表 8）。总成本降幅较小，反映出当验证器响应被缩短时仍然存在的输入 token 成本。在 N=4 时，参考定价成本也分别下降 29.5% 与 20.8%，但 Pass@1 低于带显式推理的成对验证（表 5）。
+
+表 8：N=8 时的端到端成本变化。箭头在 TerminalBench-Lite 上将带显式推理的验证与仅决策验证进行比较。成本为图 6 所用的按每次最终输出计的参考定价美元。
+
+| 生成器 | 配置 | Pass@1（%） | 成本（美元） | 成本降幅 |
+| --- | --- | --- | --- | --- |
+| TMAX-4B | 零样本 Mid-Harness | 41.50 → 38.10 | 0.125 → 0.076 | 39.2% |
+| TMAX-4B | 蒸馏 Mid-Harness | 43.88 → 41.50 | 0.134 → 0.071 | 46.8% |
+| TMAX-9B | 零样本 Mid-Harness | 54.76 → 56.12 | 0.174 → 0.138 | 20.9% |
+| TMAX-9B | 蒸馏 Mid-Harness | 57.14 → 59.18 | 0.207 → 0.157 | 24.1% |
+| TMAX-9B | + Best-of-T（T=3） | 66.33 → 65.31 | 0.797 → 0.608 | 23.7% |
+| TMAX-9B | + SR（R=1） | 60.20 → 65.99 | 0.399 → 0.309 | 22.4% |
+| TMAX-27B | 零样本 Mid-Harness | 73.13 → 71.77 | 0.818 → 0.516 | 37.0% |
+| TMAX-27B | 蒸馏 Mid-Harness | 76.19 → 74.15 | 0.812 → 0.534 | 34.3% |
+
+**成本节省延伸到组合流水线。**
+
+使用蒸馏仅决策验证时，Best-of-T 组合的成本降低 23.7%，Pass@1 低 1.02 个百分点；SR 组合的成本降低 22.4%，Pass@1 高 5.78 个百分点。这些成本包含 Best-of-T 的全部源轨迹与轨迹验证，以及 SR 的源轨迹、摘要与精炼运行。只有动作验证使用单 token 响应；轨迹验证与精炼摘要保留其原始响应格式。结果表明，更高效的动作验证也能降低组合动作缩放与轨迹缩放时的总成本。
+
+### C.3 额外的验证器推理计算
+
+**更多的验证器响应并不总能提升任务成功率。**
+
+我们在同样的 98 个 TerminalBench-Lite 任务上，使用 TMAX-9B 生成器以及 N=8、K=4 测试三种成对验证器变体，每个任务运行三次。由于各变体的验证器模型与设置不同，每个变体都有自己的单次响应参考（表 9）。
+
+表 9：TerminalBench-Lite 上的额外验证器推理。箭头将每个变体与其所指参考进行比较。验证器输出比率使用参考与变体在所有比较记录上的总补全（completion）token 数。
+
+| 变体 | 参考 | Pass@1（%）参考 → 变体 | Pass@3（%）参考 → 变体 | 验证器输出（× 参考） |
+| --- | --- | --- | --- | --- |
+| 每对五次响应 | 蒸馏、单次响应 | 57.14 → 53.40 | 75.51 → 71.43 | 4.99× |
+| 启用思考（thinking） | 零样本成对 | 54.76 → 56.12 | 71.43 → 71.43 | 4.86× |
+| 量规缩放（rubric scaling） | 零样本成对 | 54.76 → 55.10 | 71.43 → 72.45 | 2.26× |
+
+每次比较采样五个响应 [24]，尽管验证器输出接近五倍，却降低了两项成功指标。量规缩放 [2] 在超过两倍的验证器输出下只产生很小的观察增益。启用思考的配置以接近五倍的验证器输出达到了更高的 Pass@1。
+
+### C.4 与基础智能体比较中的不确定性
+
+附录 B.5 描述了重复评估的成本。我们使用同样的 98 个 TerminalBench-Lite 任务、每个配置每任务三次运行，来量化图 6 中基础智能体与 Mid-Harness 比较的不确定性。对每个任务，我们计算两种配置在三次运行上的平均成功率之差。我们对 98 个配对任务块重采样 100,000 次，并报告均值差的百分位法 95% bootstrap 置信区间。这保留了按任务的配对，并把同一任务的重复运行保持在一起，而不是把 294 次运行当作独立任务。这些区间是每个比较各自的边际区间，而不是横跨全部六个比较的联立区间。
+
+表 10：TerminalBench-Lite 上相对基础智能体的 Pass@1 差异。差异与置信区间以百分点计。Mid-Harness 使用 N=8、K=4 的成对验证。
+
+| 模型 | Mid-Harness | Δ Pass@1 | 95% CI |
+| --- | --- | --- | --- |
+| 4B | 零样本 | +2.72 | [-3.06, +8.84] |
+| 4B | 蒸馏 | +5.10 | [-0.68, +10.88] |
+| 9B | 零样本 | +4.76 | [-0.68, +10.20] |
+| 9B | 蒸馏 | +7.14 | [+1.36, +12.93] |
+| 27B | 零样本 | +2.04 | [-3.74, +7.48] |
+| 27B | 蒸馏 | +5.10 | [+0.34, +9.86] |
+
+表 10 中全部六个 Pass@1 点估计都偏向 Mid-Harness。蒸馏 9B 与 27B 的区间位于零之上，其余四个区间包含零。包含零的区间并不能确立「改进不存在」；它表明，在该置信水平下，任务级 bootstrap 分析无法把正差异与零、或与区间内的负差异区分开。例如，零样本 9B 在被评估样本中提升 4.76 个百分点，但其区间 [-0.68, 10.20] 覆盖了从小幅下降到大幅提升的范围。位于零之上的区间在本分析下为蒸馏 9B 与 27B 的正差异提供了证据，但并不意味着在每个任务或每个基准上都有改进。
+
+### C.5 Mid-Harness 在各任务组间的表现
+
+我们考察图 6 中的增益如何随任务领域、难度分组与观察到的执行长度而变化。所有比较都使用同样的 98 个 TerminalBench-Lite 任务，每个 TMAX 模型与配置在每个任务上运行三次。零样本与蒸馏 Mid-Harness 使用 N=8、K=4 的成对验证。图 10 中的每个值都是相应子组相对对应基础智能体的 Pass@1 差异。
+
+图 10：动作缩放增益随任务组与模型规模而变化。TerminalBench-Lite 上相对基础智能体的 Pass@1 变化（百分点）。Z 与 D 分别表示 N=8、K=4 的零样本与蒸馏 Mid-Harness。各面板分别按领域、难度与基础智能体执行长度对任务分组。领域与难度分组在模型间共享，而长度分组按每个模型单独定义。
+
+**蒸馏 Mid-Harness 在多个领域优于基础智能体。**
+
+相对于基础智能体，蒸馏 Mid-Harness 在软件工程、机器学习、调试与系统设置领域于全部三个模型规模上都提升了 Pass@1。软件工程方面的增益对 4B、9B、27B 分别为 2.6、5.1 与 20.5 个百分点。其他领域效果好坏参半：在科学计算任务上，蒸馏验证提升了 4B 与 9B，但使 27B 的 Pass@1 下降 10.0 个百分点。因此，总体改进与特定领域的退步并存。
+
+**Hard 组在全部三个模型规模上都受益。**
+
+我们使用基准元数据中提供的难度标签，得到 24 个 Easy、42 个 Medium、29 个 Hard 与 3 个 Extreme 任务。在 Hard 任务上，蒸馏验证为 4B、9B、27B 分别带来 2.3、6.9、10.3 个百分点的 Pass@1 提升。蒸馏验证在全部三个规模上也都提升了其余每个难度组。Extreme 组与 build/dependency 组分别只包含三个与四个任务，因此它们较大的百分比变化反映的是任务数量很少。
+
+**更长的基础智能体执行会受益，但不存在普适的长度趋势。**
+
+对每个模型与任务，我们取三次运行中观察到的基础智能体 shell 调用次数的中位数，排除完成标记（completion-marker）命令。我们将任务划分为三个长度组（长度并列者归入同组），并用同样的分组来评估该模型的所有配置（表 11）。蒸馏验证在 Long 组为 4B、9B、27B 分别带来 11.1、5.1、14.1 个百分点的 Pass@1 提升。然而，9B 在 Medium 组的增益最大，因此改进并非在所有模型上都随执行长度单调增长。这些分组描述的是观察到的基础智能体行为，而不是各模型规模共享的内在任务时程（task horizon）。
+
+表 11：基础智能体执行长度分组。每个单元格给出任务中位 shell 调用次数的范围，括号内为任务数。
+
+| 模型 | Short（短） | Medium（中） | Long（长） |
+| --- | --- | --- | --- |
+| 4B | 2–17 (34) | 18–24 (37) | 25–64 (27) |
+| 9B | 4–15 (33) | 16–24 (32) | 25–64 (33) |
+| 27B | 3–10 (39) | 11–18 (26) | 19–64 (33) |
+
+## 附录 D 验证器分析
+
+### D.1 离线验证器一致性
+
+我们使用与第 5 节相同的离线基准，并在下文详述其过滤、指标计算与额外的分数分布。
+
+### D.1.1 分数与轮次诊断
+
+**分数统计。** 每一对贡献两个候选分数与一个绝对分数差。配对分数 MAE（平均绝对误差）对每个候选在其配对上的师生（teacher-student）绝对差取平均。候选在各对中的重复出现被保留，得到 20,394 个分数观测与 10,197 个分数差。图 11 展示了离散的边际比例。图 12 的联合热图保留候选 A/B 的方向，并使用共享的线性百分比标度，每个面板合计为 100%。其单元格描述的是单个模型所给出的两个分数，而非教师对学生的混淆矩阵。这些整数分数是比较性评级，而不是经过校准的任务成功概率。
+
+图 11：分数水平与对内分数差接近教师模型的分布。每个候选分数分布包含 20,394 个观测，每个分数差分布包含 10,197 对。
+
+图 12：蒸馏使比较分数与教师模型对齐。10,197 个公共有效对上的联合 A/B 分数分布。所有面板使用相同的百分比色标。
+
+**公共状态与回合轮次。** 对于第 5 节的验证诊断，我们保留其中每个比较对两个模型都有效的状态。这留下 1,624 个状态中的 1,355 个，共包含 8,702 个比较。其余 269 个状态（16.6%）被排除，原因是至少一个已存储的比较对其中某个模型无效。因此，验证一致性以状态层面完整有效的响应为条件。状态按轮次分入 1–4、5–8、9–16、17–32 与 33+ 这些区间。各区间分别包含 182、178、388、442 与 165 个状态。前四个区间各覆盖 21 个任务，最后一个区间覆盖 8 个任务。每个区间内的所有有效状态被合并统计，不做任务级宏平均（task-macro）加权。
+
+**计算与教师模型的一致性。** 两个一致性指标都根据保存的验证器与教师模型响应计算，不执行候选动作。成对一致性是两者的 A/B/TIE 偏好相一致的比较所占比例。对于验证一致性，我们在每个状态下分别为验证器与教师模型统计其在已保存的循环赛比较（ring comparisons）中各候选获得的胜场数。A/B 偏好给被偏好的候选记一胜，TIE 则不给任何一方记胜。我们为每个模型确定胜场最多的候选；出现平局时，选择在原始候选顺序中最先出现的候选。验证一致性是验证器与教师模型选出同一候选的保留状态所占比例。该离线计算使用胜场数，而不是在线执行（第 2.2 节）时所用的按分差加权（margin-weighted）的分数。
+
+### D.2 其余的验证器分歧
+
+正文中的图 4 (b) 总结了这些分析。
+
+**失败类别与参考清晰度。** 候选语义（candidate semantics）涉及命令或代码变更的效果；执行可行性（execution feasibility）涉及它能否在当前环境中按预期执行。可见证据（visible evidence）涉及对可用观察的使用；动作阶段（action phase）涉及动作的时机或角色；冗余（redundancy）涉及重复的工作。需求（requirement）与过早完成（premature-completion）失败涉及未解决的任务条件与缺乏支撑的完成宣告。我们使用 GPT-5.6 Terra [18] 来审查来自零样本与蒸馏验证器的教师分歧案例。裁判首先评估教师偏好是否无歧义、是否有可用证据的充分支持。只有满足该标准的分歧才在本分析中被视为明确的验证器失败，并从上述预定义分类法中被指派一个主类别。图 4 (b) 报告的是通过该审查的 3,328 个零样本案例与 1,810 个蒸馏案例，而不是教师分歧的总数。候选语义与执行可行性合计占 1,926 个零样本案例与 1,220 个蒸馏案例，后者占经审查的蒸馏验证器失败的 67.4%。这些是相对于教师参考、由模型判定的失败，而不是经独立确证的动作错误或观察到的轨迹失败。
+
+### D.2.1 两个最大失败类别的示例
+
+这两个蒸馏 TMAX-9B 的分歧案例展示了图 4 (b) 中最大的类别。每个案例都以原始的 A/B 呈现形式展示一个离线成对偏好——以 GPT-5.6 Sol 为参考、GPT-5.6 Terra 为标注者——而不是观察到的轨迹失败。
+
+**候选语义：有效的字符运算被当作缺陷代码而遭拒绝。** 该任务要求从一个由 OCR 得到的四字符前缀与两个小写后缀字符中恢复出六字符 token，然后部署一个 C 语言认证服务器。在第 18 轮，OCR 提示 WaNa，但先前的搜索尚未恢复出该 token。候选 A 尝试通用前缀 BASE 与 base。候选 B 使用 C 语言搜索小写后缀，并把前缀搜索扩展为 W 后接三个字母字符。其后缀构造包括：
+
+```
+token[4] = 'a' + s1;
+token[5] = 'a' + s2;
+```
+
+其中 s1 与 s2 的取值范围为 0 到 25。蒸馏验证器以 4 比 3 的分数偏好 A，声称 'a'+s1 相比 s1+'a' 是有缺陷的。这两个表达式在 C 中是等价的整数加法，并且会在基准平台上生成预期的小写字符。参考反而偏好 B，给 A 与 B 的分数为 2 对 5，看重其基于 OCR 的搜索，同时指出扩展后的搜索可能超出命令超时。语义错误在于：拒绝了有效的字符运算，并以此作为偏好 A 的理由。
+
+**执行可行性：存在自我终止隐患的持久化启动仍获奖励。** 该任务要求实现一个 Go 语言声学模拟求解器，使其通过回归测试，并留下一个监听 9090 端口的 HTTP 服务。在第 30 轮，回归测试通过，但可见状态无法证明已有监听器在运行。候选 A 构建并启动了一个服务器二进制文件。候选 B 运行一条 python3 -c 命令来扫描进程命令行，并在计划中的 nohup 启动之前包含如下清理逻辑：
+
+```
+with open(f'/proc/{pid}/cmdline', 'r') as f:
+    cmdline = f.read()
+    if '9090' in cmdline or 'main.go' in cmdline:
+        print(f'Killing PID {pid}: {cmdline[:100]}')
+        os.kill(int(pid), 9)
+```
+
+嵌入的 Python 命令本身就同时包含这两个匹配字符串，而且该扫描既不排除自身进程，也不排除调用它的 shell。因此，它可能在到达服务器启动步骤之前就终止自身或其父进程。蒸馏验证器承认这种宽泛的进程匹配，但仍以 5 比 7 的分数偏好 B，奖励其端口检查与持久化启动。参考则偏好 A，给 A 与 B 的分数为 9 对 2——尽管 A 的端口检测逻辑另有一个缺陷——因为 B 引入了这一自我终止隐患。可行性错误在于：奖励了预期的启动，却没有考虑执行能否到达该启动。
+
+### D.3 动作验证的定性示例
+
+我们展示来自 TMAX-27B 零样本 Mid-Harness 运行的两个关键步骤。两者都使用八个候选与四枢轴（four-pivot）锦标赛中的成对验证。我们选择一个恢复案例与一个验证器错误，用来说明对命令效果的判断如何影响被执行的轨迹。
+
+**恢复：推理依据虽不完美，偏好却有用。** 在 React/TypeScript 任务中，验证器从八个候选中选出了唯一直接实现有效修复的候选。在被选动作之后，全部三个 Jest 套件与 16 个测试通过，外部评估器通过 17/17 个测试。在三次运行中，基础智能体成功 0/3 次，零样本 Mid-Harness 成功 3/3 次。尽管验证器错误地判定 diagnostics.exclude 无效——它其实是一个文件路径过滤器，而被选中的 ignoreCodes 选项用于过滤诊断代码——这一偏好仍然有用。
+
+**失败：优先进行编辑而不解决相互矛盾的证据。** 在别名规范化（alias-canonicalization）任务中，验证器偏好重写求解器，而不是去调查规范（specification）与其示例（worked example）之间的冲突。被选中的启发式将头部名称排除在规范化之外，最终未通过对应测试，只有 11/12 个测试通过，奖励为 0。下面的追踪记录（traces）给出这两个案例的候选命令与原始验证器响应。
+
+### D.3.1 详细的动作验证追踪记录
+
+我们用任务、状态、候选动作、成对验证器响应及后续结果来展开这两个示例。长命令仅在标注处缩短，验证器推理则原样复现、不作改写。候选编号指最初采样的八个动作，A/B 标签只在单次比较内部有效。
+
+**恢复示例：React 与 TypeScript 生产构建。**
+
+**任务。**
+
+> Repair a React 18 and TypeScript 5 application so typecheck, production build, and Jest tests pass. Preserve strict mode and do not modify test files.
+
+**验证前状态。** 在第 28 步，Jest 对一个导入 @types/user 的测试报告 TS6137。该运行在被选修复之后获得奖励 1。
+
+**候选动作。**
+
+候选 0：独立配置，未被选中。该命令创建了一个新配置，但没有把它连接到 Jest。
+
+```
+$ cat > /app/tsconfig.test.json << 'EOF'
+```
+
+候选 2：使用了错误诊断选项的活动配置。
+
+```
+$ cat > /app/jest.config.js << 'JESTEOF'
+[... unchanged mappings / config omitted ...]
+diagnostics: {
+  exclude: ['TS6137'],
+},
+[... closing configuration omitted ...]
+JESTEOF
+```
+
+候选 3：被选中。
+
+```
+$ cat > /app/jest.config.js << 'JESTEOF'
+[... unchanged mappings / config omitted ...]
+diagnostics: {
+  ignoreCodes: [6137],
+},
+[... closing configuration omitted ...]
+JESTEOF
+```
+
+**验证器推理：候选 2 对候选 3。** 验证器给出分数 3 与 9，偏好候选 3。
+
+```
+1) Requirement: The test suite fails with TS6137 because `@types/user` is interpreted as a type declaration namespace. The agent cannot modify test files, so the fix must be in the Jest / ts-jest configuration to suppress this specific error. 2) Evidence: The terminal output shows `error TS6137: Cannot import type declaration files` in `UserList.test.tsx`. 3) Candidate A attempts to use `diagnostics: { exclude: ['TS6137'] }`. This is not a valid ts-jest configuration property; `exclude` is not recognized for filtering diagnostic codes, so the error will likely persist. 4) Candidate B uses `diagnostics: { ignoreCodes: [6137] }`. This is the correct, documented ts-jest API for suppressing specific TypeScript error codes during test execution. 5) Contrast: Candidate B uses the correct configuration key (`ignoreCodes`) to resolve the blocker, whereas Candidate A uses an invalid key (`exclude`) that will fail to suppress the error, leaving the tests failing.
+```
+
+**验证器推理：候选 3 对候选 0。** 验证器给出分数 9 与 2，偏好候选 3。
+
+```
+The unresolved requirement is passing `npm test` despite the TS6137 error in `UserList.test.tsx` caused by importing from `@types/user`. The error message explicitly suggests importing 'user' instead, but the constraint forbids modifying test files. Candidate A updates `jest.config.js` to include `diagnostics: { ignoreCodes: [6137] }` in the ts-jest transform options. This directly suppresses the specific error code blocking the test suite, allowing the tests to run and pass. Candidate B creates a `tsconfig.test.json` but does not update `jest.config.js` to reference it (via `globals.ts-jest.tsconfig` or similar). Without updating the Jest config to use this new tsconfig, the error persists, resulting in no progress. Candidate A provides a concrete, effective fix for the immediate blocker.
+```
+
+**结果。**
+
+```
+Before verification:
+
+Test Suites: 1 failed, 2 passed, 3 total
+Tests: 13 passed, 13 total
+
+After verification:
+
+Test Suites: 3 passed, 3 total
+Tests: 16 passed, 16 total
+
+External evaluator:
+
+17 passed in 22.77 s
+```
+
+**验证器错误：构建系统别名规范化。**
+
+**任务。**
+
+> Implement /app/solution.py with solve(lines), including transitive symmetric aliases and lexicographically smallest canonical names. The prompt's worked example conflicts with its explicit lexicographic rule.
+
+**验证前状态。** 在第 4 步，该实现针对 {build, compile, link} 产出 build，而从示例复制的自测（self-tests）预期是 compile。该运行在被选编辑之后获得奖励 0。
+
+**候选动作。**
+
+候选 0：诊断性检查，未被选中。
+
+```
+# Alias group: {build, compile, link}
+# Canonical (lex min): build (b < c < l)
+#
+# But expected output uses "compile" not "build"
+# This means either:
+# 1. The example is wrong
+# 2. The canonical is NOT lex-min of the full group
+print("build < compile:", 'build' < 'compile')
+print("compile < link:", 'compile' < 'link')
+print("build < link:", 'build' < 'link')
+# build IS the lex minimum, but expected output shows compile
+```
+
+候选 5：诊断性追踪，未被选中。
+
+```
+# Debug test 1
+import sys
+from collections import defaultdict
+
+lines = ["TARGET build", "Alias= compile link",
+         "Depends= all", "TARGET compile", "Before= clean"]
+
+# Parse
+blocks = []
+current_block = None
+[... remaining parser/debug code omitted ...]
+```
+
+候选 7：被选中。
+
+```
+$ cat > /app/solution.py << 'PYEOF'
+[... parser and union-find omitted ...]
+canonical_map = {}
+for root, members in groups.items():
+    # Among members, find those that are alias values
+    value_members = [m for m in members
+                     if m in alias_value_names]
+    if value_members:
+        canon = min(value_members)
+    else:
+        canon = min(members)
+    for m in members:
+        canonical_map[m] = canon
+[... remaining implementation and self-tests omitted ...]
+PYEOF
+```
+
+**验证器推理：候选 7 对候选 5。** 验证器给出分数 8 与 3，偏好候选 7。
+
+```
+Requirement: The agent must fix the failing tests (alias canonicalization and topological ordering) to complete the task. Evidence: Tests 1 and 2 failed in the previous step; Test 1 shows 'build' instead of 'compile' in the output, indicating a canonicalization bug. Candidate A rewrites the entire solution with a specific fix for alias canonicalization (using lex-min of alias values) and encounter-order tie-breaking, then runs the tests. This is a concrete fix that directly addresses the observed failures. Candidate B only runs a debug script to trace the alias logic for Test 1. While debugging can be useful, the agent has already identified the likely cause (canonicalization logic) and Candidate A implements the fix immediately. Candidate B's debugging is redundant given the clear nature of the bug (lex-min of all members vs. specific subset) and delays progress. Candidate A's approach shrinks the search space by attempting a fix and verifying it, whereas B only produces more observations. A's risk is that the new canonicalization logic might be incorrect, but it is a well-reasoned hypothesis based on the spec. B provides no progress toward the final artifact.
+```
+
+**验证器推理：候选 7 对候选 0。** 验证器给出分数 6 与 2，偏好候选 7。
+
+```
+Requirement: The agent must fix the failing tests (alias canonicalization and topological sort order) by implementing the correct logic, not just analyzing the problem. Evidence: Tests 1 and 2 fail in the current state; Test 1 expects 'compile' as canonical (lex-min of group {build, compile, link} is 'build', so the spec or example implies a different rule, likely that the header target is excluded from the alias group's lex-min calculation or the example implies the alias values define the group). Candidate A writes a complete new solution attempting to fix these issues by excluding header names from the canonical lex-min calculation and using encounter order for tie-breaking. This is a concrete step toward resolution, though the logic for canonicalization (excluding header names) is a heuristic guess that may be incorrect. Candidate B only runs a Python script to print comparison results and speculate about the spec being wrong. It produces no code changes to /app/solution.py. Candidate A makes progress by attempting a fix; Candidate B makes zero progress toward the goal of a working solution. A is superior because it changes the state of the artifact, whereas B is purely observational.
+```
+
+**结果。**
+
+```
+test_03_alias_canonicalization_lexmin
+
+Expected:
+{"cycles":[], "order":["all", "build", "clean"]}
+
+Obtained:
+{"cycles":[], "order":["all", "compile", "clean"]}
+
+11/12 tests pass; final reward = 0.
+```
+
+评估器的失败与候选 7 引入的别名规则相符。
+
+---
+
+> 参考文献列表未收录，请见[原文](https://arxiv.org/abs/2609.39982)。
+
+- [返回笔记目录](/notes/)
