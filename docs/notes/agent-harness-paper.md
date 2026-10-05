@@ -1,5 +1,7 @@
 # Harness Engineering：11 个编码 Agent 的解剖报告
 
+> 📚 **全文中文翻译已上线**：[《Harness Engineering》中文全译（17 章 + 附录）](/notes/harness-engineering-zh)（CC BY 4.0）
+
 > 📖 读书笔记 · 信息来源：X 用户 [Yarchi（@undefinedKi）](https://x.com/undefinedKi) 2026-10-03 的[这条推文](https://x.com/undefinedKi/status/2106479763636302271)（转发链条起点为[原推](https://x.com/undefinedKi/status/2106479644354474463)）
 > 📄 论文原文：arXiv [2609.00006](https://arxiv.org/abs/2609.00006) · [PDF 直链](https://arxiv.org/pdf/2609.00006)
 > 整理于 2026-10-05 · 译文为个人学习摘要，版权归原作者
