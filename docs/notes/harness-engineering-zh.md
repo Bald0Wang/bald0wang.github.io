@@ -6,7 +6,7 @@ title: Harness Engineering 中文全译
 
 > 📄 原文：*Harness Engineering: Anatomy, Architecture, and Evolution of Coding Agents — A Source-Code Study of Eleven Systems* · Paul Barbaste, Tristan Darrigol, Germain Vu, Tom Wiltberger（InclusiveBrains / Wavestone AI Lab）· arXiv [2609.00006](https://arxiv.org/abs/2609.00006) · [PDF](https://arxiv.org/pdf/2609.00006)
 > 🔑 原文以 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 授权发布，本中文翻译遵循同一许可、以相同方式共享。
-> 🤖 全译由 AI（ZCode）辅助完成、经人工校订整理于 2026-10-05；导读与要点版见 [Harness Engineering 笔记](/notes/agent-harness-paper)。参考文献列表从略（见原文）；推文信息源见[原推](https://x.com/undefinedKi/status/2106479644354474463)。
+> 🤖 全译由 AI（ZCode）辅助完成、经人工校订整理于 2026-10-05；导读与要点版见 [Harness Engineering 笔记](/notes/agent-harness-paper)。参考文献列表从略（见原文）；推文信息源见[原推](https://x.com/undefinedKi/status/2106479644354474463)。原文提示词格式中的尖括号标签（如 SOUL、example 等）在本文中以全角〈〉呈现。
 
 ## Harness（驾驭层）工程：编码智能体的解剖、架构与演化——对十一个系统的源码研究
 
@@ -333,7 +333,7 @@ Aider 仍是唯一主循环呈反思形态的系统，但语料中已长出三�
 
 Claude Code 与 Codex 支持一种协调者模式，由父 agent 编排多个工作者 agent；Hermes 把同样的形态置于配置之后（orchestrator 角色加 spawn-depth 设置即可解锁嵌套委托树，另外还有一个独立的 Kanban 蜂群模式，以子进程方式在 SQLite 黑板上运行「规划根 → 工作者 → 验证者」）。这是迭代循环之上的一个叠加层，增加了分层派发机制。
 
-在 Claude Code 中，协调者经 AgentTool 生成子 agent，每个子 agent 获得一个分叉的上下文，带有隔离的 AbortController、克隆的文件状态缓存以及被抑制的权限对话框。工作者经 <task-notification> XML 块把结果传回，协调者在委派下一阶段之前先综合各项发现。工作流结构为：研究 → 综合 → 实现 → 验证。
+在 Claude Code 中，协调者经 AgentTool 生成子 agent，每个子 agent 获得一个分叉的上下文，带有隔离的 AbortController、克隆的文件状态缓存以及被抑制的权限对话框。工作者经 ＜task-notification＞ XML 块把结果传回，协调者在委派下一阶段之前先综合各项发现。工作流结构为：研究 → 综合 → 实现 → 验证。
 
 在 Codex 中，子 agent 经 AgentControl::spawn_agent() 生成，获得专属的 ThreadId，并通过类型化的 Mailbox 通道通信。每个线程维护自己的历史，SpawnAgentForkMode 控制上下文继承（FullHistory 或 LastNTurns(N)）。
 
@@ -415,13 +415,13 @@ Agent 脚手架如何与其底层 LLM 相关联，是整个系统中最具分量
 
 **Claude Code：带缓存边界的模块化组装。** Claude Code 的提示词由十余个命名区块组装而成，以 `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` 标记分界。边界之前的区块（identity、system rules、task guidance、tool patterns、tone）是静态的，经 Blake2b 哈希、以 `scope: 'global'` 缓存。边界之后的区块（session guidance、memory、environment、MCP instructions、language、scratchpad）是动态的，经带记忆化（memoization）的 `systemPromptSection()` 逐轮计算。这一设计把提示词缓存失效降到最低：静态前缀（占绝大多数 token）跨轮次乃至跨子 Agent（经 fork 时刻的 `renderedSystemPrompt` 共享）取得高缓存命中率。
 
-**Codex：作为服务端交付数据的逐模型提示词。** Codex 为每个模型世代维护独立提示词，且交付机制本身也在协同演化：早期版本编译进客户端的 Markdown 模板仍留在代码树中，但代码已不再引用——实际生效的提示词以模型清单（`models.json`，捆绑作回退，并从远程 `/models` 端点以 ETag 缓存刷新）的 `base_instructions` 字段交付。7 月版清单覆盖从 GPT-5.2 到一个 GPT-5.6 家族，且提示词是「personality 模板化」的：一个 `{{ personality }}` 变量由用户可选变体（friendly/pragmatic）填充。提示词内容跨世代有可测量的漂移：GPT-5.2 的提示词以版本身份开场（"You are GPT-5.2 running in the Codex CLI…"）并带有明确的 no-commit 与禁止引用规则；GPT-5.5 的提示词以 "You are Codex, a coding agent based on GPT-5…" 开场（5.6 家族进一步缩短为 "You are Codex, an agent based on GPT-5"），扩展出一段内容丰富的 Personality 小节，并把 no-commit 规则与反过度打磨指令整体丢弃。行为政策正从提示词散文迁移到功能开关：一个 `codex_git_commit` 标志现在管辖提交行为。7.3 节将回到这一「变薄」现象。
+**Codex：作为服务端交付数据的逐模型提示词。** Codex 为每个模型世代维护独立提示词，且交付机制本身也在协同演化：早期版本编译进客户端的 Markdown 模板仍留在代码树中，但代码已不再引用——实际生效的提示词以模型清单（`models.json`，捆绑作回退，并从远程 `/models` 端点以 ETag 缓存刷新）的 `base_instructions` 字段交付。7 月版清单覆盖从 GPT-5.2 到一个 GPT-5.6 家族，且提示词是「personality 模板化」的：一个 <span v-pre>`{{ personality }}`</span> 变量由用户可选变体（friendly/pragmatic）填充。提示词内容跨世代有可测量的漂移：GPT-5.2 的提示词以版本身份开场（"You are GPT-5.2 running in the Codex CLI…"）并带有明确的 no-commit 与禁止引用规则；GPT-5.5 的提示词以 "You are Codex, a coding agent based on GPT-5…" 开场（5.6 家族进一步缩短为 "You are Codex, an agent based on GPT-5"），扩展出一段内容丰富的 Personality 小节，并把 no-commit 规则与反过度打磨指令整体丢弃。行为政策正从提示词散文迁移到功能开关：一个 `codex_git_commit` 标志现在管辖提交行为。7.3 节将回到这一「变薄」现象。
 
 **OpenHands：带缓存层级的提示词注册表。** OpenHands 以一个由受保护、有序的 PromptSection 对象构成的 PromptRegistry 取代了原来的 Jinja2 PromptManager，这些对象被分入 `CacheTier.STATIC` 与 `DYNAMIC` 两桶，渲染为双块系统消息，其静态前缀保持逐字节稳定以供供应商提示词缓存——与 Claude Code 相同的静态/动态缓存边界设计，却是从一个基于 LiteLLM 的多供应商系统内部独立得出的。随附 18 个命名的静态区块（Soul、Role、Memory、Security、SecurityRiskAssessment、VersionControl 等），Jinja 模板仅作为逃生通道存活。
 
 **Hermes：逐位精确前缀的三层组装。** Hermes 每会话构建一次提示词，分三层——stable、context、volatile——约 15 个指导区块按模型家族门控（tool-use 强制区块发给 GPT/Codex/Gemini/Grok/Qwen/DeepSeek 模型、绝不发给 Claude，代码注释援引了观察到的逐模型失败案例）。缓存经济学驱动细节：单一 `system_and_3` 策略放置四个 `cache_control` 断点，且提示词前缀被逐位精确规范化（工具调用 JSON 的排序紧凑重序列化、仅到日期的时间戳、冻结的记忆快照），使本地 llama.cpp 与 vLLM 的 KV 缓存也能跨轮命中。
 
-**Pi：一个小构建器，随工具集协变。** Pi 的整个系统提示词是一个约 170 行的构建器，发出 30–40 行内容：persona、工具列表、去重的逐工具指南片段（每个工具贡献 `promptSnippet` / `promptGuidelines`，因此提示词随活动工具集协变）、来自 AGENTS.md 的 `<project_context>`、一个 `<available_skills>` XML 索引、日期与 cwd。几乎所有行为政策都被刻意省略，交给用户提供的上下文文件与扩展。
+**Pi：一个小构建器，随工具集协变。** Pi 的整个系统提示词是一个约 170 行的构建器，发出 30–40 行内容：persona、工具列表、去重的逐工具指南片段（每个工具贡献 `promptSnippet` / `promptGuidelines`，因此提示词随活动工具集协变）、来自 AGENTS.md 的 `＜project_context＞`、一个 `＜available_skills＞` XML 索引、日期与 cwd。几乎所有行为政策都被刻意省略，交给用户提供的上下文文件与扩展。
 
 **OpenCode：模型家族提示词矩阵。** OpenCode 按 model-id 子串分派九套基础提示词之一——claude、gpt-、gemini 等各有专用 .txt 提示词、语域各异（Claude 提示词以 "You are OpenCode, the best coding agent on the planet." 开场）——把 Codex 的逐代模板推广为跨厂商版本。组装刻意把系统提示词封顶为两条消息（默认一条；插件扩展后的提示词会被折叠回上限），以匹配它同时以六种供应商方言发出的前两个缓存断点槽位。
 
@@ -435,9 +435,9 @@ Agent 脚手架如何与其底层 LLM 相关联，是整个系统中最具分量
 
 上一小节考察了提示词如何组装（缓存边界、模板、层级合并）。现在转向它们实际说了什么：每个脚手架投射的 persona、它向模型发出的显式指令，以及它用来让这些指令真正钉住的修辞手法。我们通读了每个系统的规范系统提示词，并提取出反复出现的维度。若干模式证明在原本互不相干的代码库之间是趋同的。
 
-**身份与 persona。** Persona 开场从简到繁。Mini-SWE-Agent 最简："You are a helpful assistant that can interact with a computer"——而 Pi 的内层 agent 库比它还简（"You are a helpful assistant."），编码层只加上 "You are an expert coding assistant operating inside pi, a coding agent harness."。OpenHands 加了一个角色："You are OpenHands agent, a helpful AI assistant that can interact with a computer to solve tasks"——如今包在一个从用户可覆盖的 SOUL.md 加载的 `<SOUL>` 区块里。Codex 的 GPT-5.2 提示词对模型耦合最为直言："You are GPT-5.2 running in the Codex CLI, a terminal-based coding assistant"——GPT-5.5 世代抛弃了这一开场，改为 "You are Codex, a coding agent based on GPT-5…"（5.6 家族进一步缩短为 "an agent based on GPT-5"），并配上一段内容丰富的 Personality 小节。OpenCode 按模型改变 persona：Claude、Codex 与 Meta 模型被告知 "You are OpenCode, the best coding agent on the planet,"，而默认世系得到的是朴实的 "an interactive CLI tool that helps users with software engineering tasks."。Hermes 分层叠加一个总体身份（"You are Hermes Agent…created by Nous Research…prioritize being genuinely useful over being verbose"）与仅在自动检测到时才注入的编码姿态："Operate like a careful senior engineer."。Mistral Vibe 在 4 月版以抱怨既往行为的开场（"CRITICAL: Users complain you are too verbose"）著称，如今以一份正式的指令层级契约开场：七个优先级（critical ≫ user ≫ repo AGENTS.md ≫ user AGENTS.md ≫ prompt defaults ≫ skills/MCP ≫ external-data-as-data）——把提示词注入防御表达为一种排序，而非一纸禁令。Aider 完全不用 persona，改用角色断言："Act as an expert software developer. Always use best practices when coding."。Claude Code 介于两极之间：简短开场，随后在后续区块中详细展开。
+**身份与 persona。** Persona 开场从简到繁。Mini-SWE-Agent 最简："You are a helpful assistant that can interact with a computer"——而 Pi 的内层 agent 库比它还简（"You are a helpful assistant."），编码层只加上 "You are an expert coding assistant operating inside pi, a coding agent harness."。OpenHands 加了一个角色："You are OpenHands agent, a helpful AI assistant that can interact with a computer to solve tasks"——如今包在一个从用户可覆盖的 SOUL.md 加载的 `＜SOUL＞` 区块里。Codex 的 GPT-5.2 提示词对模型耦合最为直言："You are GPT-5.2 running in the Codex CLI, a terminal-based coding assistant"——GPT-5.5 世代抛弃了这一开场，改为 "You are Codex, a coding agent based on GPT-5…"（5.6 家族进一步缩短为 "an agent based on GPT-5"），并配上一段内容丰富的 Personality 小节。OpenCode 按模型改变 persona：Claude、Codex 与 Meta 模型被告知 "You are OpenCode, the best coding agent on the planet,"，而默认世系得到的是朴实的 "an interactive CLI tool that helps users with software engineering tasks."。Hermes 分层叠加一个总体身份（"You are Hermes Agent…created by Nous Research…prioritize being genuinely useful over being verbose"）与仅在自动检测到时才注入的编码姿态："Operate like a careful senior engineer."。Mistral Vibe 在 4 月版以抱怨既往行为的开场（"CRITICAL: Users complain you are too verbose"）著称，如今以一份正式的指令层级契约开场：七个优先级（critical ≫ user ≫ repo AGENTS.md ≫ user AGENTS.md ≫ prompt defaults ≫ skills/MCP ≫ external-data-as-data）——把提示词注入防御表达为一种排序，而非一纸禁令。Aider 完全不用 persona，改用角色断言："Act as an expert software developer. Always use best practices when coding."。Claude Code 介于两极之间：简短开场，随后在后续区块中详细展开。
 
-**冗长控制。** 十一份提示词中有九份含显式的冗长指令，但实现差别极大。OpenCode 如今是语料库中最激进的提示词："You MUST answer concisely with fewer than 4 lines…One word answers are best"，还配有 `<example>` 区块（"user: what is 2+2? assistant: 4"）——不过值得注意的是，其 Claude 专属提示词反而丢掉了回退世系保留的量化规则。Mistral Vibe 保留 150 词预算（"Most tasks need under 150 words of prose"）与结构优先规则（"Structure first. Prose after, if at all"）。Claude Code 的响应长度规则是量化的（工具间更新 ≤ 25 词，回合结束摘要 ≤ 100 词）——不过我们的再审计发现，该数字区块作为 A/B 实验仅对 Anthropic 内部构建启用；外部用户收到的是定性指导。Codex 在 5.2 世代是定性的（"concise, direct, and friendly"）；5.6 提示词把冗长折叠进 Personality 小节，而 5.5 保留自己的长度规则。Hermes 是定性的（"Be concise: lead with the change or answer, not a preamble"），Pi 极简（单条 bullet："Be concise in your responses"），Aider 要求在任何补丁之前 "a few short sentences"。Mini-SWE-Agent 以结构而非言语达到同一目标：每轮恰好一个 THOUGHT 块加一条 bash 命令。OpenHands 独自把冗长大体留给模型：其基础提示词对长度只字未提，不过其 GPT-5 家族模型专属区块确实要求简洁回复与短 preamble。
+**冗长控制。** 十一份提示词中有九份含显式的冗长指令，但实现差别极大。OpenCode 如今是语料库中最激进的提示词："You MUST answer concisely with fewer than 4 lines…One word answers are best"，还配有 `＜example＞` 区块（"user: what is 2+2? assistant: 4"）——不过值得注意的是，其 Claude 专属提示词反而丢掉了回退世系保留的量化规则。Mistral Vibe 保留 150 词预算（"Most tasks need under 150 words of prose"）与结构优先规则（"Structure first. Prose after, if at all"）。Claude Code 的响应长度规则是量化的（工具间更新 ≤ 25 词，回合结束摘要 ≤ 100 词）——不过我们的再审计发现，该数字区块作为 A/B 实验仅对 Anthropic 内部构建启用；外部用户收到的是定性指导。Codex 在 5.2 世代是定性的（"concise, direct, and friendly"）；5.6 提示词把冗长折叠进 Personality 小节，而 5.5 保留自己的长度规则。Hermes 是定性的（"Be concise: lead with the change or answer, not a preamble"），Pi 极简（单条 bullet："Be concise in your responses"），Aider 要求在任何补丁之前 "a few short sentences"。Mini-SWE-Agent 以结构而非言语达到同一目标：每轮恰好一个 THOUGHT 块加一条 bash 命令。OpenHands 独自把冗长大体留给模型：其基础提示词对长度只字未提，不过其 GPT-5 家族模型专属区块确实要求简洁回复与短 preamble。
 
 **禁用短语与禁止的表层形式。** Mistral Vibe 开创了禁用短语清单；其重写后的提示词把 4 月的两份清单合并为一份："No filler words: 'robust', 'elegant', 'seamless', 'powerful', 'Great!', 'Absolutely!', 'Of course!', 'Happy to help!'"——直接试图压制 LLM 的语域口头禅。OpenCode 现在运行语料库的第二份禁语清单，且依模型而异：其 GPT 提示词禁用 "Done —" 与 "Got it," 之类的开场白，连同 emoji 与 em dash。Mistral Vibe 还保留着语料库中最严格的 emoji 禁令："No emoji of any kind. No smiley faces, icons, flags, or Unicode symbols…This applies to prose, code comments, and commit messages."。Claude Code 是条件式的（"Only use emojis if the user explicitly requests it"）；OpenCode 在其 Claude、default、Meta 与 Trinity 提示词中携带完全相同的条件规则，而其 GPT 提示词干脆全禁 emoji，其 GPT-4 时代的 beast 提示词反而指示用 emoji 状态标记；Gemini CLI、Mini-SWE-Agent、Aider、Hermes 与 Pi 对 emoji 只字不提。Codex 的 5.2 提示词禁用一种 CLI 专属表层形式——形如 `[F:README.md L5-L14]` 的行内引用（带括号引用符号）——因为 Codex 终端无法渲染它们；该规则在 5.5/5.6 提示词中缺席。
 
@@ -445,9 +445,9 @@ Agent 脚手架如何与其底层 LLM 相关联，是整个系统中最具分量
 
 **先读后改与先验证后声称。** 三个提示词把读代码作为改代码的前提。Claude Code："In general, do not propose changes to code you haven't read."。Mistral Vibe 在两次快照之间强化了其版本："Never edit a file you have not read in this session. Do not edit a file in the same turn you first read it—read, then act on the next turn."。OpenCode 的编辑工具描述声称有强制执行（"This tool will error if you attempt an edit without reading the file"）——但该工具源码中不存在任何运行时读取追踪；描述言过其实，这提醒我们：提示词文本是行为愿望，而非机制。Claude Code 另外禁止虚假成功声称——"Never claim 'all tests pass' when output shows failures, never suppress or simplify failing checks (tests, lints, type errors) to manufacture a green result"——该区块与其词数预算一样，先随内部构建交付；Hermes 则是唯一把同一要求机制化的系统，靠 6 节的 verify-on-stop 守卫加一条普适的反编造指令（"NEVER substitute plausible-looking fabricated output…"）。其余系统把这当作隐含要求。
 
-**Git 提交政策：一场消散的趋同。** 在 2026 年 4 月，这是语料库中最紧密的修辞趋同：每一个提到 git 的提示词都禁止自主提交。到 7 月，图景已分裂为三种立场。禁令在 Claude Code（"NEVER commit changes unless the user explicitly asks you to"）、OpenCode（"NEVER commit changes unless the user explicitly asks"）、Hermes（"don't commit, push, or rewrite history unless asked, and never read, print, or commit secrets"）与 Codex 的 5.2 世代提示词中存续。Mistral Vibe 反转了立场：它删除了带标签的 "Never Commit" 硬规则（changelog 写着 "Loosened the no-git-commit constraint"），如今反而主动指示模型如何提交，并强制 Co-Authored-By 签名 trailer。OpenHands 从未持有可供反转的提交禁令——其 `<VERSION_CONTROL>` 区块早在窗口期之前就在教授提交机制与 co-author trailer——同时在单独的 `<PULL_REQUESTS>` 区块中把 push 与创建 pull request 门控在用户显式请求上。而 Codex 最新的提示词把规则整体删除：GPT-5.6 指令中不含任何 "commit" 字样。一个 `codex_git_commit` 标志曾短暂管辖提交署名行为，但在 7 月快照中已退役（未使用）——该指令干脆离开了提示词。保持普适的是外层边界：语料库中没有提示词允许自主 push、force-push 或改写历史。换言之，4 月的提交趋同并非稳定的工程结论，而是信任校准的一次快照——而信任在一个季度内发生了可测量的移动。
+**Git 提交政策：一场消散的趋同。** 在 2026 年 4 月，这是语料库中最紧密的修辞趋同：每一个提到 git 的提示词都禁止自主提交。到 7 月，图景已分裂为三种立场。禁令在 Claude Code（"NEVER commit changes unless the user explicitly asks you to"）、OpenCode（"NEVER commit changes unless the user explicitly asks"）、Hermes（"don't commit, push, or rewrite history unless asked, and never read, print, or commit secrets"）与 Codex 的 5.2 世代提示词中存续。Mistral Vibe 反转了立场：它删除了带标签的 "Never Commit" 硬规则（changelog 写着 "Loosened the no-git-commit constraint"），如今反而主动指示模型如何提交，并强制 Co-Authored-By 签名 trailer。OpenHands 从未持有可供反转的提交禁令——其 `＜VERSION_CONTROL＞` 区块早在窗口期之前就在教授提交机制与 co-author trailer——同时在单独的 `＜PULL_REQUESTS＞` 区块中把 push 与创建 pull request 门控在用户显式请求上。而 Codex 最新的提示词把规则整体删除：GPT-5.6 指令中不含任何 "commit" 字样。一个 `codex_git_commit` 标志曾短暂管辖提交署名行为，但在 7 月快照中已退役（未使用）——该指令干脆离开了提示词。保持普适的是外层边界：语料库中没有提示词允许自主 push、force-push 或改写历史。换言之，4 月的提交趋同并非稳定的工程结论，而是信任校准的一次快照——而信任在一个季度内发生了可测量的移动。
 
-**强调标记。** 语料库呈现三种截然不同的提示词内强调约定。Claude Code、Codex、OpenHands 与 OpenCode 行内使用大写标签：IMPORTANT:、CRITICAL:、NEVER（OpenCode 另在运行时注入 `<system-reminder>` XML）。Mini-SWE-Agent 使用类 XML 标签（`<important>…</important>`），Pi 仅把 XML 用作数据定界符，Hermes 则把 MUST / NEVER 大写与对勾/叉号范例对组合——其 XML 标记的强制区块只发给 GPT/Codex 与 Grok 模型。Aider 几乎不用——其强制力来自补丁格式示例而非强调性散文（补丁格式指令中残留一个稀疏的 IMPORTANT:）。Mistral Vibe 走得最远：CRITICAL: 标签与 Hard Rules 区块都不复存在；强调如今完全结构化，是一份显式的可覆盖性契约，带有命名的 "Critical instructions—not overridable" 与 "Overridable defaults" 区块。对比之下可见三个流派：修辞性强调（大写标签）、结构性强调（命名规则区块与优先级契约）、示例驱动强调（范例对与格式样例），多数系统至少结合其中两种。
+**强调标记。** 语料库呈现三种截然不同的提示词内强调约定。Claude Code、Codex、OpenHands 与 OpenCode 行内使用大写标签：IMPORTANT:、CRITICAL:、NEVER（OpenCode 另在运行时注入 `＜system-reminder＞` XML）。Mini-SWE-Agent 使用类 XML 标签（`＜important＞…＜/important＞`），Pi 仅把 XML 用作数据定界符，Hermes 则把 MUST / NEVER 大写与对勾/叉号范例对组合——其 XML 标记的强制区块只发给 GPT/Codex 与 Grok 模型。Aider 几乎不用——其强制力来自补丁格式示例而非强调性散文（补丁格式指令中残留一个稀疏的 IMPORTANT:）。Mistral Vibe 走得最远：CRITICAL: 标签与 Hard Rules 区块都不复存在；强调如今完全结构化，是一份显式的可覆盖性契约，带有命名的 "Critical instructions—not overridable" 与 "Overridable defaults" 区块。对比之下可见三个流派：修辞性强调（大写标签）、结构性强调（命名规则区块与优先级契约）、示例驱动强调（范例对与格式样例），多数系统至少结合其中两种。
 
 **工具使用哲学。** 工具指导的具体程度各异。Claude Code 坚持专用工具优先于 shell："Do NOT use the Bash tool to run commands when a relevant dedicated tool is provided. … Using dedicated tools allows the user to better understand and review your work."。Codex 为并行优化："Parallelize tool calls whenever possible—especially file reads."。Aider 的指令是格式机械性的："Your entire response containing the patch MUST start with *** Begin Patch on a line by itself. … Each file MUST appear only once in the patch."。Mini-SWE-Agent 最受限：每轮恰好一个 bash 块，目录与环境变更以行内前缀完成（`MY_VAR=val cd /path && …`），因为每次调用都在新子 shell 中运行。
 
@@ -505,11 +505,11 @@ Gemini CLI 暴露 extended thinking（剥离 thought parts 以保持缓存干净
 
 ### 8.2 工具接口架构
 
-工具接口的范围从几乎没有抽象——Mini-SWE-Agent 把一切通过单次 shell 调用发送（`subprocess.Popen(shell=True)`，仅包了一层用于在超时时杀死进程组）——到丰富的类型化契约。Claude Code 的 43 个工具各自把校验、权限检查、并发安全与 UI 渲染声明为彼此独立的接口关注点。Codex 用 Rust trait 对象实现运行时多态——注册表存储 `Arc<dyn CoreToolRuntime>`（其中 `CoreToolRuntime: ToolExecutor`），该抽象如今被抽取为独立的 `codex-tools` crate，与 code mode 及扩展共享。Gemini CLI 通过一个状态机 Scheduler 路由调用，让每次调用依次走过确定性的 Validating → Executing → Completed/Errored 阶段。Mistral Vibe 增加了经 tree-sitter 解析的 bash——一条基于 `asyncio.create_subprocess_shell` 的执行路径，在派生进程前用 `tree_sitter_bash` 校验命令结构——以及细粒度权限作用域（命令模式、文件模式、URL 白名单、目录包含关系）。Hermes 的单例注册表把注册与暴露分开：69 个工具在导入时自注册，toolset 层界定各平台模型的可见范围，逐工具可用性探测（30 秒 TTL 加 last-good 宽限窗口）防止一个不稳定的 docker 版本把整个 toolset 剥掉，而一个强制转换（coercion）层负责修复 schema 漂移（`"42"` → `42`），其动机来自对开源模型实际输出的观察。Pi 给它的七个工具各配一个可插拔的 Operations 接口（`BashOperations`、`EditOperations` 等）——这是唯一的远程化接缝，SSH、容器与 micro-VM 扩展经它迁移执行位置而不必触碰工具本身。OpenCode 用 Effect schema 注册了 17 个第一方工具，并按模型切换工具面：GPT 系模型得到 Codex 的 `apply_patch` DSL 移植版，并完全失去 `edit` / `write`（见 8.4 节）。这一谱系体现了「简单 vs 能力」之轴：接口面越大，安全保证越多，但工程成本也越高。
+工具接口的范围从几乎没有抽象——Mini-SWE-Agent 把一切通过单次 shell 调用发送（`subprocess.Popen(shell=True)`，仅包了一层用于在超时时杀死进程组）——到丰富的类型化契约。Claude Code 的 43 个工具各自把校验、权限检查、并发安全与 UI 渲染声明为彼此独立的接口关注点。Codex 用 Rust trait 对象实现运行时多态——注册表存储 `Arc＜dyn CoreToolRuntime＞`（其中 `CoreToolRuntime: ToolExecutor`），该抽象如今被抽取为独立的 `codex-tools` crate，与 code mode 及扩展共享。Gemini CLI 通过一个状态机 Scheduler 路由调用，让每次调用依次走过确定性的 Validating → Executing → Completed/Errored 阶段。Mistral Vibe 增加了经 tree-sitter 解析的 bash——一条基于 `asyncio.create_subprocess_shell` 的执行路径，在派生进程前用 `tree_sitter_bash` 校验命令结构——以及细粒度权限作用域（命令模式、文件模式、URL 白名单、目录包含关系）。Hermes 的单例注册表把注册与暴露分开：69 个工具在导入时自注册，toolset 层界定各平台模型的可见范围，逐工具可用性探测（30 秒 TTL 加 last-good 宽限窗口）防止一个不稳定的 docker 版本把整个 toolset 剥掉，而一个强制转换（coercion）层负责修复 schema 漂移（`"42"` → `42`），其动机来自对开源模型实际输出的观察。Pi 给它的七个工具各配一个可插拔的 Operations 接口（`BashOperations`、`EditOperations` 等）——这是唯一的远程化接缝，SSH、容器与 micro-VM 扩展经它迁移执行位置而不必触碰工具本身。OpenCode 用 Effect schema 注册了 17 个第一方工具，并按模型切换工具面：GPT 系模型得到 Codex 的 `apply_patch` DSL 移植版，并完全失去 `edit` / `write`（见 8.4 节）。这一谱系体现了「简单 vs 能力」之轴：接口面越大，安全保证越多，但工程成本也越高。
 
 ### 8.3 延迟工具加载
 
-Claude Code 引入了延迟工具加载：标记为 `shouldDefer = true` 的工具不进入初始系统提示词。LLM 通过 `ToolSearchTool` 按需发现它们，该工具支持关键词搜索与直接选择（`select:<tool_name>`）。这显著缩小了提示词体积：43 个工具中初始只加载核心子集。延迟工具集通过 `getDeferredToolsCacheKey()` 缓存，集合变化时失效。
+Claude Code 引入了延迟工具加载：标记为 `shouldDefer = true` 的工具不进入初始系统提示词。LLM 通过 `ToolSearchTool` 按需发现它们，该工具支持关键词搜索与直接选择（`select:＜tool_name＞`）。这显著缩小了提示词体积：43 个工具中初始只加载核心子集。延迟工具集通过 `getDeferredToolsCacheKey()` 缓存，集合变化时失效。
 
 4 月版把这一点当作 Claude Code 独有；到 7 月，它已成为一个正在扩散的模式，出现了多个独立实现。Codex 用 `defer_loading` 标志标记工具（默认是 MCP 工具），并提供一个由覆盖工具规格的 BM25 词汇索引支撑的 `tool_search` 工具——同样的提示词经济学，只是用排序检索取代了子串匹配。Hermes 用一个阈值把这一思想泛化：当 MCP 与插件 schema 将超过上下文窗口的 10% 时，它们折叠成三个桥接工具（`tool_search` / `tool_describe` / `tool_call`），由一个内联的 BM25 引擎检索。OpenCode 对 skills 采用延迟加载（目录只列出名称与描述；由原生 skill 工具取回正文），并把其实验性 code mode 视为 MCP 目录延迟：不暴露每个 MCP 工具，而是用一个 `execute` 工具对着目录运行模型编写的脚本。相比之下，Mistral Vibe 的 `defer_mcp` 标志只为了降低延迟而推迟启动时的 MCP 连接，并不推迟提示词可见性——一旦集成完成，每个 MCP 工具都对模型可见，因此我们不再把它归入提示词级延迟模式。
 
@@ -610,9 +610,9 @@ Codex 经专用的 `/responses/compact` 端点同时支持本地进程内摘要�
 
 **Hermes：谱系式压缩。** Hermes 落在阈值家族（在上下文的 50% 减去 max-tokens、下限 64K 时触发；保护前三条消息外加一个带 token 预算的尾部；迭代式辅助模型摘要封顶于 min(上下文的 5%, 12K token)），但加入了一个其他系统都没有的构造：压缩不重写转录——它终结会话。每次压缩关闭当前 SQLite 会话（`end_reason='compression'`）并轮换到由 `parent_session_id` 链接的子会话；谱系辅助函数沿祖先链遍历，会话检索会跨谱系去重。上下文管理与会话持久化合为同一个机制，任何历史都不会被销毁。引擎可插拔（一个 ContextEngine ABC），与 OpenHands 的 condenser 体系遥相呼应。
 
-**Pi：会话树之上的压缩。** Pi 在 contextWindow − 16,384 token 时触发（保留最近 20K），并从其他策略借来两个特征：摘要是迭代合并的——更新提示词重新摄取前一次摘要，而不是从头重新摘要（递归摘要特征）；一个 `session_before_compact` 钩子让扩展可以否决或整体替换结果（可插拔凝结特征）。其独特基底是会话本身：一棵只追加的 JSONL 树，每个条目带有 `id` / `parentId`，一个可移动的叶指针定义活跃分支。`/tree` 导航、`/fork` 与 `/clone` 把其他 harness 拆成三个独立特性来实现的东西（检查点、回退、替代性探索）统一为一体，且放弃一个分支时可选择生成一段 LLM 分支摘要拼接进新位置，探索因此永不丢失——代价是文件系统状态不被恢复，这是一个明示的取舍。累积的 `<read-files>` / `<modified-files>` 列表作为结构化记忆跨压缩持久保留。
+**Pi：会话树之上的压缩。** Pi 在 contextWindow − 16,384 token 时触发（保留最近 20K），并从其他策略借来两个特征：摘要是迭代合并的——更新提示词重新摄取前一次摘要，而不是从头重新摘要（递归摘要特征）；一个 `session_before_compact` 钩子让扩展可以否决或整体替换结果（可插拔凝结特征）。其独特基底是会话本身：一棵只追加的 JSONL 树，每个条目带有 `id` / `parentId`，一个可移动的叶指针定义活跃分支。`/tree` 导航、`/fork` 与 `/clone` 把其他 harness 拆成三个独立特性来实现的东西（检查点、回退、替代性探索）统一为一体，且放弃一个分支时可选择生成一段 LLM 分支摘要拼接进新位置，探索因此永不丢失——代价是文件系统状态不被恢复，这是一个明示的取舍。累积的 `＜read-files＞` / `＜modified-files＞` 列表作为结构化记忆跨压缩持久保留。
 
-**OpenCode：锚定的增量摘要。** OpenCode 在 `limit.input` 减去保留输出余量处触发，用 chars/4 估算（整棵代码树中不存在任何分词器），并产出语料库中最显式的增量摘要：前一次摘要在 `<previous-summary>` 块中传回，由一个隐藏的、拒绝所有工具的 compaction agent 合并（指令是「preserve still-true details, remove stale details」，即保留仍成立的细节、移除过时细节），写入规定的 Markdown 分节（Objective / Important Details / Work State / Next Move / Relevant Files）。保留两轮用户消息的逐字尾部；可选开启的修剪软删除旧工具输出，保护最新的 40K token，且仅当可回收量超过 20K 时才触发。
+**OpenCode：锚定的增量摘要。** OpenCode 在 `limit.input` 减去保留输出余量处触发，用 chars/4 估算（整棵代码树中不存在任何分词器），并产出语料库中最显式的增量摘要：前一次摘要在 `＜previous-summary＞` 块中传回，由一个隐藏的、拒绝所有工具的 compaction agent 合并（指令是「preserve still-true details, remove stale details」，即保留仍成立的细节、移除过时细节），写入规定的 Markdown 分节（Objective / Important Details / Work State / Next Move / Relevant Files）。保留两轮用户消息的逐字尾部；可选开启的修剪软删除旧工具输出，保护最新的 40K token，且仅当可回收量超过 20K 时才触发。
 
 ### 9.6 持久记忆流水线
 
@@ -622,7 +622,7 @@ Codex 运行着最自主的设计。一个后台两阶段流水线从最近的�
 
 Gemini CLI 则朝相反的治理方向移动。它 4 月时代可调用的 `save_memory` 工具已经消失——系统提示词现在直白地声明不存在这样的工具——取而代之的是：(a) 模型直接用普通编辑工具修改 GEMINI.md 或私有的每项目 MEMORY.md 索引；(b) 一个异步的 skill 抽取子 agent，挖掘已完成的会话转录，把规范的 patch 文件产出到每项目 `.inbox/` 中，由用户经 `/memory` 审阅并应用。Codex 让 agent 自主固化记忆，Gemini CLI 则在抽取与持久化之间插入一个由人把关的审阅收件箱——语料库中唯一这样的设计。
 
-Hermes 刻意让持久记忆保持极小且缓存友好：两个限长的 Markdown 文件（MEMORY.md，2,200 字符；USER.md，1,375），以冻结快照形式注入，因此会话中途的写入只落盘，不会使提示词缓存失效。对话召回是确定性的——一个 `session_search` 工具查询由触发器维护的 SQLite FTS5 表（BM25，外加面向中日韩文字的 trigram 索引），「no LLM calls anywhere」（任何地方都不调用 LLM）——embedding 只存在于可选的记忆插件中。OpenClaw 自带一个 Active Memory 插件（我们顺带记录在案：自前一版所审计的 4 月发布起它就已存在），在主回复之前立即运行一个专用记忆子 agent，另有更早的可选 LanceDB 对话记忆扩展。OpenHands 把记忆折入其上下文文件约定：一个 `<MEMORY>` 提示词小节指示模型把持久事实写进 AGENTS.md 本身。Claude Code 为每个项目持久化 Markdown 事实的记忆目录；Pi 与 Mini-SWE-Agent 刻意不持久化会话基底之外的任何东西。
+Hermes 刻意让持久记忆保持极小且缓存友好：两个限长的 Markdown 文件（MEMORY.md，2,200 字符；USER.md，1,375），以冻结快照形式注入，因此会话中途的写入只落盘，不会使提示词缓存失效。对话召回是确定性的——一个 `session_search` 工具查询由触发器维护的 SQLite FTS5 表（BM25，外加面向中日韩文字的 trigram 索引），「no LLM calls anywhere」（任何地方都不调用 LLM）——embedding 只存在于可选的记忆插件中。OpenClaw 自带一个 Active Memory 插件（我们顺带记录在案：自前一版所审计的 4 月发布起它就已存在），在主回复之前立即运行一个专用记忆子 agent，另有更早的可选 LanceDB 对话记忆扩展。OpenHands 把记忆折入其上下文文件约定：一个 `＜MEMORY＞` 提示词小节指示模型把持久事实写进 AGENTS.md 本身。Claude Code 为每个项目持久化 Markdown 事实的记忆目录；Pi 与 Mini-SWE-Agent 刻意不持久化会话基底之外的任何东西。
 
 **观察 5.** 持久记忆已取代压缩，成为上下文工程的前沿。压缩设计已经收敛（十一个系统中七个使用阈值触发的 LLM 摘要，且越来越多地采用增量合并）；如今区分这一领域的是记忆写入路径。四种治理模型并存：agent 维护（Codex：一个沙箱化子 agent 在 git 基线化存储上固化记忆）、人工把关（Gemini CLI：抽取子 agent 写入补丁收件箱，用户经 `/memory` 审阅）、模型直写但有界（Hermes：字符数封顶的 Markdown 快照，按会话冻结以保证缓存卫生；OpenHands、Claude Code：上下文文件约定）、回合前 agent 召回（OpenClaw 的 Active Memory 子 agent）。值得注意的是，十一个系统中没有任何一个把基于 embedding 的检索用作主要记忆基底——观察 13.2 的确定性检索结论从代码延伸到了记忆，SQLite 全文检索（Hermes）是生产环境的上限。
 
@@ -636,10 +636,10 @@ Hermes 刻意让持久记忆保持极小且缓存友好：两个限长的 Markdo
 - **Gemini CLI 上下文文件**：三作用域的 GEMINI.md 合并（global、extension、project），受文件夹信任门控；另经工具输出 JIT 注入子目录上下文文件，并有私有的 MEMORY.md 项目索引。
 - **Mistral Vibe JIT 发现**：提示词中放顶层 AGENTS.md（user 与 project 作用域），且自 v2.19 起，当 `read_file` 触及其下方文件时，嵌套的 AGENTS.md 会即时浮现。
 - **Hermes 带威胁扫描的层级**：先找到先赢的遍历（`.hermes.md` / `HERMES.md` 直到 git 根，然后 AGENTS.md、CLAUDE.md、`.cursorrules`）；每个上下文文件都扫描提示词注入模式，命中即整体屏蔽；一个子目录提示跟踪器把每目录上下文文件追加进工具结果，缓存中的提示词保持原样。
-- **Pi 祖先遍历**：AGENTS.md / CLAUDE.md 从 cwd 到根收集进 `<project_context>` 标签；仓库控制的配置（扩展、skills）的加载受信任门控，但上下文文件无论如何都会加载——这是一处有文档记载的、对注入面的有意接受。
+- **Pi 祖先遍历**：AGENTS.md / CLAUDE.md 从 cwd 到根收集进 `＜project_context＞` 标签；仓库控制的配置（扩展、skills）的加载受信任门控，但上下文文件无论如何都会加载——这是一处有文档记载的、对注入面的有意接受。
 - **OpenCode 拉取式附加**：AGENTS.md / CLAUDE.md / CONTEXT.md 向上遍历（首个文件名优先），外加远程 URL 指令文件；嵌套的 AGENTS.md 在 read 工具触及其下方文件时惰性附加。
 - **OpenHands 第三方摄取**：skills 子系统把 AGENTS.md、`.cursorrules` 与每目录嵌套的 AGENTS.md 摄取为作用域规则——一个系统读取另外三个生态的约定。
-- **OpenClaw 转录**：按 agent/会话持久化的 JSONL 转录文件，位于 `~/.openclaw/agents/<agentId>/sessions/<sessionKey>.jsonl`。
+- **OpenClaw 转录**：按 agent/会话持久化的 JSONL 转录文件，位于 `~/.openclaw/agents/＜agentId＞/sessions/＜sessionKey＞.jsonl`。
 
 ---
 
@@ -705,7 +705,7 @@ network_rule(
 
 ### 10.3 OpenHands：集成式纵深防御
 
-OpenHands 可插拔的 SecurityAnalyzer 框架在 V1 SDK 中大幅成熟。V0 时代的 Invariant 分析器已不复存在；当前组合是 LLMSecurityAnalyzer（Agent 对每个动作的 security_risk 自评，系统提示词指示它填写该参数）与 GraySwanAnalyzer（外部对抗式 API），再加上两个新的确定性分析器——PatternSecurityAnalyzer 与 PolicyRailSecurityAnalyzer，后者基于 shell-AST 解析，内置 fetch-to-exec、raw-disk-op、catastrophic-delete 等命名轨道（rail）。EnsembleSecurityAnalyzer 以「最坏情况胜出」的方式融合各裁决，失效的子分析器一律失效关闭为 HIGH。LOW/MEDIUM/HIGH/UNKNOWN 风险枚举保留；确认机制现在是一个策略对象（AlwaysConfirm / NeverConfirm / ConfirmRisky）。提示词侧补齐了双向注入防御：源自仓库的上下文被包裹在 <UNTRUSTED_CONTENT> 标记中，且有一段专门的提示词讲授风险评估协议。
+OpenHands 可插拔的 SecurityAnalyzer 框架在 V1 SDK 中大幅成熟。V0 时代的 Invariant 分析器已不复存在；当前组合是 LLMSecurityAnalyzer（Agent 对每个动作的 security_risk 自评，系统提示词指示它填写该参数）与 GraySwanAnalyzer（外部对抗式 API），再加上两个新的确定性分析器——PatternSecurityAnalyzer 与 PolicyRailSecurityAnalyzer，后者基于 shell-AST 解析，内置 fetch-to-exec、raw-disk-op、catastrophic-delete 等命名轨道（rail）。EnsembleSecurityAnalyzer 以「最坏情况胜出」的方式融合各裁决，失效的子分析器一律失效关闭为 HIGH。LOW/MEDIUM/HIGH/UNKNOWN 风险枚举保留；确认机制现在是一个策略对象（AlwaysConfirm / NeverConfirm / ConfirmRisky）。提示词侧补齐了双向注入防御：源自仓库的上下文被包裹在 ＜UNTRUSTED_CONTENT＞ 标记中，且有一段专门的提示词讲授风险评估协议。
 
 ### 10.4 OpenClaw：基于作用域的授权
 
@@ -736,7 +736,7 @@ Agent 档案内置安全分级：plan 与 chat 档案为 SAFE（只读）；defa
 
 ### 10.7 Hermes：在 YOLO 下依然生效的策略底线
 
-Hermes 把沙箱问题反了过来：这个语料库中最大的 Python 系统不带任何 OS 级隔离原语——其工具目录树中找不到 Seatbelt、Landlock、seccomp 或 Bubblewrap——而是把隔离委托给六个可插拔执行后端。在本地后端上，安全是大规模的「策略即代码」：一个 3,200 行的审批模块，其文档宣称「config.yaml 即安全策略」。它的层次：用户 deny-glob；一条十二模式的强硬底线（rm -rf /、mkfs、向块设备 dd、fork 炸弹、shutdown），在 --yolo 下依然生效——YOLO 环境变量在模块导入时即被冻结，正是为了让被提示词注入的 Skill 无法在运行时把它翻转；47 个危险命令模式，在去混淆变体上匹配（去除引号拼接、折叠命令替换、锚定命令位置）；一个外部 Rust 内容扫描器（Tirith，经 cosign 验证安装）；以及一个可选的辅助 LLM 闸门（_smart_approve：temperature 0、最多 16 token、APPROVE/DENY/ESCALATE——其代码注明致谢 Codex 的 Smart Approvals）。其独特威胁模型是内容承载型：对上下文文件、记忆写入、MCP 工具描述与 Skill 安装做 promptware 扫描（带 builtin/trusted/community 信任分级与隔离区）；始终封锁云元数据端点的 SSRF 防护；不可信工具结果以 <untrusted_tool_result> 定界符包裹，并对形近字符做去武装（defanging）。容器后端完全跳过危险命令层——直到宿主 bind-mount 把它重新带入。显著缺席项：没有按工具的 allow/ask/deny 矩阵，也没有只追加审计日志。
+Hermes 把沙箱问题反了过来：这个语料库中最大的 Python 系统不带任何 OS 级隔离原语——其工具目录树中找不到 Seatbelt、Landlock、seccomp 或 Bubblewrap——而是把隔离委托给六个可插拔执行后端。在本地后端上，安全是大规模的「策略即代码」：一个 3,200 行的审批模块，其文档宣称「config.yaml 即安全策略」。它的层次：用户 deny-glob；一条十二模式的强硬底线（rm -rf /、mkfs、向块设备 dd、fork 炸弹、shutdown），在 --yolo 下依然生效——YOLO 环境变量在模块导入时即被冻结，正是为了让被提示词注入的 Skill 无法在运行时把它翻转；47 个危险命令模式，在去混淆变体上匹配（去除引号拼接、折叠命令替换、锚定命令位置）；一个外部 Rust 内容扫描器（Tirith，经 cosign 验证安装）；以及一个可选的辅助 LLM 闸门（_smart_approve：temperature 0、最多 16 token、APPROVE/DENY/ESCALATE——其代码注明致谢 Codex 的 Smart Approvals）。其独特威胁模型是内容承载型：对上下文文件、记忆写入、MCP 工具描述与 Skill 安装做 promptware 扫描（带 builtin/trusted/community 信任分级与隔离区）；始终封锁云元数据端点的 SSRF 防护；不可信工具结果以 ＜untrusted_tool_result＞ 定界符包裹，并对形近字符做去武装（defanging）。容器后端完全跳过危险命令层——直到宿主 bind-mount 把它重新带入。显著缺席项：没有按工具的 allow/ask/deny 矩阵，也没有只追加审计日志。
 
 ### 10.8 Pi：把「缺失」记录在案作为安全论据
 
@@ -780,7 +780,7 @@ Mini-SWE-Agent 仅实现资源限制作为安全机制——step_limit、cost_li
 | Mistral Vibe | task 工具 → 新 AgentLoop | 全新配置 + 会话目录；继承权限存储、scratchpad、hooks | 事件转发 | 1 跳 / 顺序 | 仅限标记 subagent 的档案（explore） |
 | Hermes | delegate_task 进程内 fork；Kanban swarm 子进程 | 全新上下文、自有任务 id；继承 provider/凭据，无历史 | 生成时给定目标；流式事件；摘要返回；SQLite 黑板（swarm） | 默认 1，orchestrator 角色解锁嵌套 / 3 并发（池） | 与父工具集取交集 + 6 工具黑名单 |
 | Pi（扩展） | 扩展 spawn `pi --mode json -p` OS 进程 | 硬进程隔离；全新上下文 | 解析子进程 JSONL stdout 取进度/成本 | 无上限（无计数器）/ 池 4、最多 8；顺序链 | 子进程 --tools 标志来自 agent frontmatter |
-| OpenCode | task 工具 → 子 Session（同一循环） | parentID 会话；子继承父的 deny + 外部目录规则 | `<task_result>` XML；后台结果注入为合成用户消息 | 递归默认关闭，可选开启且无上限 / 并行 | 权限规则集（deny "*" 隐藏工具） |
+| OpenCode | task 工具 → 子 Session（同一循环） | parentID 会话；子继承父的 deny + 外部目录规则 | `＜task_result＞` XML；后台结果注入为合成用户消息 | 递归默认关闭，可选开启且无上限 / 并行 | 权限规则集（deny "*" 隐藏工具） |
 | OpenClaw | ACP 会话生成 | 子进程；全新会话 | ACP delta 事件 | 递归 / 并行（RPC） | 会话作用域 |
 
 图 6（六种模式示意）：
@@ -870,7 +870,7 @@ Gemini CLI 与语料库中所有其他系统的分野在于 packages/a2a-server 
 
 ### 11.7 Hermes：受控委派、Swarm 与 Mixture-of-Agents
 
-Hermes 是默认扁平的委派，向上留有两个逃生口。delegate_task 在线程池上以进程内方式构建子 Agent：全新会话、聚焦的系统提示词、只返回摘要、工具集与父取交集（「子 Agent 不得获得父所缺的工具」），外加一个六工具黑名单（不许递归、不许用户交互、不许记忆写入、不许排程）。默认保守——三个并发子任务、50 次迭代预算、深度 1——但 role="orchestrator" 配置加 spawn-depth 设置可解锁嵌套树，编排者提示词块明确「以 OpenClaw 的 buildSubagentSystemPrompt 为蓝本」。后台委派返回一个句柄，并经完成队列作为全新一轮重新进入，而非在中途拼接——这是一个保提示词缓存的选择。在此之上是进程级一层：Kanban swarm 以独立的 hermes -p <profile> 子进程运行 planning-root → 并行 worker → verifier → synthesizer，经一个 SQLite 看板与结构化 JSON 评论黑板协调——以共享数据库而非协议或信道实现协调者-工人。第三个叠加层 /moa 把顾问式参考模型 fan-out（最多八个并发），其输出为主模型的下一轮迭代「调味」。
+Hermes 是默认扁平的委派，向上留有两个逃生口。delegate_task 在线程池上以进程内方式构建子 Agent：全新会话、聚焦的系统提示词、只返回摘要、工具集与父取交集（「子 Agent 不得获得父所缺的工具」），外加一个六工具黑名单（不许递归、不许用户交互、不许记忆写入、不许排程）。默认保守——三个并发子任务、50 次迭代预算、深度 1——但 role="orchestrator" 配置加 spawn-depth 设置可解锁嵌套树，编排者提示词块明确「以 OpenClaw 的 buildSubagentSystemPrompt 为蓝本」。后台委派返回一个句柄，并经完成队列作为全新一轮重新进入，而非在中途拼接——这是一个保提示词缓存的选择。在此之上是进程级一层：Kanban swarm 以独立的 hermes -p ＜profile＞ 子进程运行 planning-root → 并行 worker → verifier → synthesizer，经一个 SQLite 看板与结构化 JSON 评论黑板协调——以共享数据库而非协议或信道实现协调者-工人。第三个叠加层 /moa 把顾问式参考模型 fan-out（最多八个并发），其输出为主模型的下一轮迭代「调味」。
 
 ### 11.8 Pi：子 Agent 作为扩展，舰队作为包
 
@@ -878,7 +878,7 @@ Pi 核心没有 spawn 或 task 工具——子 Agent 是其扩展论点的旗舰
 
 ### 11.9 OpenCode：能力由权限派生的子会话
 
-OpenCode 的子 Agent 是子会话，而非独立引擎：task 工具创建一个带 parentID 的 Session，运行同一循环，可经 task_id 恢复，只返回以 `<task_result>` XML 包裹的最终 assistant 文本；后台结果作为合成用户消息注入。Agent 与模式统一于一个 schema（mode: primary|subagent|all）：内置的有 build、plan（除 plan 文件外拒绝编辑）、general、只读的 explore，外加隐藏的 compaction / title / summary 工具 Agent——plan 模式是一个权限规则集加一个 `<system-reminder>` 注入，而非架构性叠加。工具可用性处处由权限派生（对某工具拒绝 "*" 会把它从 LLM 视野中移除），遏制是不对称的：子只继承父的 deny 规则。递归默认关闭（task 对子自动拒绝），但可按 Agent 选择性开启，且无数字深度上限；自定义 Agent 来自配置、Markdown 文件，或——独一无二地——LLM 生成（对 {identifier, whenToUse, systemPrompt} 调 generateObject）。
+OpenCode 的子 Agent 是子会话，而非独立引擎：task 工具创建一个带 parentID 的 Session，运行同一循环，可经 task_id 恢复，只返回以 `＜task_result＞` XML 包裹的最终 assistant 文本；后台结果作为合成用户消息注入。Agent 与模式统一于一个 schema（mode: primary|subagent|all）：内置的有 build、plan（除 plan 文件外拒绝编辑）、general、只读的 explore，外加隐藏的 compaction / title / summary 工具 Agent——plan 模式是一个权限规则集加一个 `＜system-reminder＞` 注入，而非架构性叠加。工具可用性处处由权限派生（对某工具拒绝 "*" 会把它从 LLM 视野中移除），遏制是不对称的：子只继承父的 deny 规则。递归默认关闭（task 对子自动拒绝），但可按 Agent 选择性开启，且无数字深度上限；自定义 Agent 来自配置、Markdown 文件，或——独一无二地——LLM 生成（对 {identifier, whenToUse, systemPrompt} 调 generateObject）。
 
 ### 11.10 OpenClaw 基于会话的编排
 
@@ -964,9 +964,9 @@ OpenCode 覆盖工具、prompts、resources 与 resource templates，支持 OAut
 | Codex | ✓ | `core-skills/` 与 `skills/` 根目录；插件提供的 skill 根目录 | `skills/list` app-server RPC + TUI `$` 提及；隐式调用检测 | 自定义 Rust；元数据在随上下文规模伸缩的 token 预算内急切加载，正文在 `$` 提及或检测到调用时注入；skills 声明 MCP/env 依赖，由 Codex 自动安装 |
 | Gemini CLI | ✓ | `~/.gemini/skills/`、`.gemini/skills/`、`.agents/skills/`，另含内置 skills（`skill-creator`、`antigravity-support`）；优先级为工作区 > 用户 > 内置 | ActivateSkill 工具把 skill 包入 XML 并附 available_resources 树；权限确认 UI | 与 agentskills.io 对齐，带 `isBuiltin` 扩展；启动时急切遍历；安装经路径穿越加固 |
 | Mistral Vibe | ✓ | `.agents/skills/`、`.vibe/skills/`、`~/.vibe/skills/`、`~/.agents/skills/`、用户 `skill_paths`；项目发现受信任门控 | `skill` 工具（延迟）；用户 `/skill-name` 调用物化为合成工具调用 | 完全符合 agentskills.io；远程注册表客户端（带版本目录）；内置「自我认知」skill |
-| OpenHands | ✓ | `{workdir,git-root}/.agents/skills/`、`.openhands/skills/`（+遗留 microagents）；用户侧等价路径 + 托管安装 | 元数据置于 `<available_skills>`；正文按需经内置 `invoke_skill` 工具取用 | agentskills.io 标志；渐进式披露；文件触碰时的 PathTrigger 规则；服务端 CRUD/同步/市场 API；把 AGENTS.md/.cursorrules 吸收为作用域规则 |
+| OpenHands | ✓ | `{workdir,git-root}/.agents/skills/`、`.openhands/skills/`（+遗留 microagents）；用户侧等价路径 + 托管安装 | 元数据置于 `＜available_skills＞`；正文按需经内置 `invoke_skill` 工具取用 | agentskills.io 标志；渐进式披露；文件触碰时的 PathTrigger 规则；服务端 CRUD/同步/市场 API；把 AGENTS.md/.cursorrules 吸收为作用域规则 |
 | Hermes | ✓ | `~/.hermes/skills/`（由 72 个捆绑 skill 播种；Skills Hub 另可安装 102 个官方 skill）+ 只读 `external_dirs` | 三层渐进披露：提示词内索引 → `skill_view` → 链接资产；skills 兼作斜杠命令 | 兼容 agentskills.io；信任分级的 Skills Hub（builtin/trusted/community），带预安装扫描与隔离；经 `skill_manage` 自我创作 |
-| Pi | ✓ | `~/.pi/agent/skills/`、`~/.agents/skills/`、`.pi/skills/`、`.agents/skills/`（自 cwd 至 git 根）、包、`--skill`；项目路径受信任门控 | 无专用工具：`<available_skills>` XML 索引；正文经普通 read 工具加载；`/skill:name` 展开 | agentskills.io，刻意宽松（仅警告，仍加载）；`disable-model-invocation` 门控 |
+| Pi | ✓ | `~/.pi/agent/skills/`、`~/.agents/skills/`、`.pi/skills/`、`.agents/skills/`（自 cwd 至 git 根）、包、`--skill`；项目路径受信任门控 | 无专用工具：`＜available_skills＞` XML 索引；正文经普通 read 工具加载；`/skill:name` 展开 | agentskills.io，刻意宽松（仅警告，仍加载）；`disable-model-invocation` 门控 |
 | OpenCode | ✓ | 配置目录下的 `{skill,skills}/**/SKILL.md`、`~/.claude/skills`、`.claude/`、`.agents/` 向上遍历、额外路径、远程 URL 注册表（带版本的 `index.json` 缓存） | 原生 skill 工具（延迟：目录仅列出 name+description） | agentskills.io 字段集；逐 skill 权限门控 |
 | OpenClaw | ✓ | `~/.openclaw/skills/`、`.agents/skills/`、插件提供、`skills.load.extraDirs` 配置 | 以 XML 注入系统提示词；`/skills` 斜杠命令列出可用项 | 兼容 agentskills.io；经 `metadata.openclaw.requires`（`bins`、`env`、OS）门控；受治理安装（Skill Workshop 审批流、来源经核验的 ClawHub） |
 | Aider | ✗ | — | — | — |
@@ -1036,7 +1036,7 @@ MCP 与 skills 作用于不同的层。MCP 是一种线上协议，供智能体�
 | 模型族提示词矩阵（Model-Family Prompt Matrix） | 按模型族/代际分发不同的基础提示词 | Codex（服务器目录）、OpenCode（9 份提示词）、Hermes（门控块） |
 | 缓存方言扇出（Cache-Dialect Fanout） | 同时发出所有提供商的缓存控制方言 | OpenCode |
 | 语法感知的命令权限控制（Syntax-Aware Command Permissioning） | 命令经解析（tree-sitter），授权按参数元数限定作用域 | OpenCode；Mistral Vibe（解析校验）、Hermes（去混淆匹配） |
-| 不可信内容定界（Untrusted-Content Delimiting） | 工具/网页结果以污点标记包裹并对分隔符去武装 | Hermes、OpenHands（`<UNTRUSTED_CONTENT>`） |
+| 不可信内容定界（Untrusted-Content Delimiting） | 工具/网页结果以污点标记包裹并对分隔符去武装 | Hermes、OpenHands（`＜UNTRUSTED_CONTENT＞`） |
 | harness 模仿（Harness Mimicry） | 客户端呈现第一方 harness 的身份（请求头、提示词开头、工具名大小写），以搭乘其订阅制 OAuth 后端 | Pi（Anthropic OAuth 上的 Claude Code 身份；ChatGPT 套餐的 Codex 后端） |
 
 ### 13.2 双重缺席：没有智能体框架，没有代码 RAG
@@ -1400,7 +1400,7 @@ def discover_context(cwd: pathlib.Path = pathlib.Path.cwd()) -> str:
     for p in reversed([cwd, *cwd.parents]):  # root-to-leaf
         md = p / "AGENTS.md"
         if md.exists():
-            parts.append(f"<ctx path='{md}'>\n{md.read_text()}\n</ctx>")
+            parts.append(f"＜ctx path='{md}'＞\n{md.read_text()}\n＜/ctx＞")
     return "\n".join(parts)
 
 # ---- Middleware pipeline (Recommendation 1) ----------------------------------
@@ -1517,10 +1517,10 @@ class Agent:
 | Mistral Vibe | 严格（< 150 词） | 明确 | 相反：预期提交，带签名尾注 | 严格禁止 | 可覆盖性契约（结构层面） |
 | OpenHands | 无 | 明确（按文件后缀） | 教授提交操作；push/PR 受门控 | 无 | XML 角色标签 |
 | Aider | “few short sentences”（几句短句） | 隐式 | 静默 | 静默 | 格式示例 |
-| Mini-SWE-Agent | 结构性（每回合 1 条命令） | 静默 | 静默 | 静默 | `<important>` XML |
+| Mini-SWE-Agent | 结构性（每回合 1 条命令） | 静默 | 静默 | 静默 | `＜important＞` XML |
 | Hermes | 定性（“lead with the change”，先讲改动） | 明确 | 除非被要求，否则不提交/推送/改写 | 无 | MUST / NEVER + 示例对；模型门控的 XML |
 | Pi | 单条要点（“Be concise”，要简洁） | 静默（委派） | 静默（委派） | 静默 | 仅 XML 数据标签 |
-| OpenCode | 量化（< 4 行；依模型而定） | 明确 | 除非被要求，否则不提交 | 条件式；GPT 提示词中禁止 | IMPORTANT: / NEVER + `<system-reminder>` |
+| OpenCode | 量化（< 4 行；依模型而定） | 明确 | 除非被要求，否则不提交 | 条件式；GPT 提示词中禁止 | IMPORTANT: / NEVER + `＜system-reminder＞` |
 | OpenClaw | 按 agent 而定 | 继承 | 继承 | 继承 | 按 agent 而定 |
 
 **表 17：各系统使用的高级 API 特性（2026 年 7 月）**
