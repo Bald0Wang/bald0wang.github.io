@@ -14,6 +14,7 @@
 - [Harness Engineering：11 个编码 Agent 的解剖报告](/notes/agent-harness-paper) — Agent = 模型 + Harness，七件套蓝图（来源：X @undefinedKi / arXiv 2609.00006）
 - [《Harness Engineering》中文全译](/notes/harness-engineering-zh) — 17 章 + 附录全文翻译（CC BY 4.0）
 - [《Mid-Harness》中文全译](/notes/mid-harness-zh) — 在模型与 Harness 之间做动作级测试时扩展，TerminalBench-Lite Pass@1 50%→68%（arXiv 2609.39982，CC BY 4.0）
+- [《如果自动化 AI 研发触发智能爆炸，会发生什么？》中文全译](/notes/intelligence-explosion-zh) — 剑桥 CASP 报告（Frontier AI Working Paper No. 2/2026），Hinton、Bengio 等 22 位作者，三大政策建议；附[原文 PDF 存档](/papers/intelligence-explosion.pdf)
 
 ## 待建分类
 
