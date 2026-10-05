@@ -8,6 +8,10 @@
 
 - [写作示例](/notes/example) — 展示常用的 Markdown 写法，可作为笔记模板
 
+## 读书笔记
+
+- [论文叙事六大范式](/notes/paper-narrative-paradigms) — 35 篇 2026 顶会最佳论文的叙事方法论（来源：人工智能学社）
+
 ## 待建分类
 
 - 编程语言
