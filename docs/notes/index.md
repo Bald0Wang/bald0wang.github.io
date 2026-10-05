@@ -11,6 +11,7 @@
 ## 读书笔记
 
 - [论文叙事六大范式](/notes/paper-narrative-paradigms) — 35 篇 2026 顶会最佳论文的叙事方法论（来源：人工智能学社）
+- [Harness Engineering：11 个编码 Agent 的解剖报告](/notes/agent-harness-paper) — Agent = 模型 + Harness，七件套蓝图（来源：X @undefinedKi / arXiv 2609.00006）
 
 ## 待建分类
 
