@@ -15,6 +15,7 @@
 - [《Harness Engineering》中文全译](/notes/harness-engineering-zh) — 17 章 + 附录全文翻译（CC BY 4.0）
 - [《Mid-Harness》中文全译](/notes/mid-harness-zh) — 在模型与 Harness 之间做动作级测试时扩展，TerminalBench-Lite Pass@1 50%→68%（arXiv 2609.39982，CC BY 4.0）
 - [《如果自动化 AI 研发触发智能爆炸，会发生什么？》中文全译](/notes/intelligence-explosion-zh) — 剑桥 CASP 报告（Frontier AI Working Paper No. 2/2026），Hinton、Bengio 等 22 位作者，三大政策建议；附[原文 PDF 存档](/papers/intelligence-explosion.pdf)
+- [训练「选项顺序不变性」进 Jev 模型 · 交互式图解](/jev-choice-order/) — 复现 X @neural_avb 长文：因果注意力泄漏、位置 ID 重置 + 掩码两把手术刀，bev-decider-0.4B 组装流水线（可玩的 8 站教程）
 
 ## 待建分类
 

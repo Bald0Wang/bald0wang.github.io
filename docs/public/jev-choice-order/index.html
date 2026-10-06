@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>训练「选项顺序不变性」进 Jev 模型 · 交互式图解</title>
+<style>
+:root{
+  --paper:#FAF6EF; --ink:#2B2B2B; --ink2:#5f5a52; --line:#e8e0d2;
+  --accent:#E8590C; --blue:#1C7ED6; --green:#2F9E44; --purple:#7048E8; --pink:#D6336C; --teal:#1098AD;
+  --card:#fff; --shadow:0 2px 10px rgba(60,50,30,.07);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  line-height:1.75;font-size:16px}
+.wrap{max-width:1020px;margin:0 auto;padding:0 20px}
+#pbar{position:fixed;top:0;left:0;height:4px;width:0;background:linear-gradient(90deg,var(--accent),var(--pink));z-index:99;transition:width .15s}
+a{color:var(--blue)}
+code{background:#f1ece1;border-radius:5px;padding:1px 6px;font-size:.88em;font-family:ui-monospace,Menlo,monospace}
+
+/* ---------- hero ---------- */
+.hero{padding:64px 0 8px}
+.badgerow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.badge{font-size:12.5px;padding:3px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink2)}
+.badge.hot{background:var(--accent);color:#fff;border-color:var(--accent)}
+h1{font-size:clamp(26px,4vw,40px);line-height:1.28;margin:0 0 10px;letter-spacing:.5px}
+.sub{color:var(--ink2);font-size:15.5px;margin:0 0 22px}
+.tldr{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--accent);
+  border-radius:14px;padding:20px 24px;box-shadow:var(--shadow);margin:18px 0}
+.tldr b{color:var(--accent)}
+.tldr ul{margin:8px 0 0;padding-left:1.3em}
+.metarow{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0 6px}
+.chiplink{display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13.5px;
+  padding:6px 13px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--ink2);transition:.15s}
+.chiplink:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- map ---------- */
+.map{padding:34px 0 10px}
+.mapgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.mapitem{display:block;text-decoration:none;background:#fff;border:1px solid var(--line);border-radius:12px;
+  padding:12px 14px;transition:.15s;color:var(--ink)}
+.mapitem:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--shadow)}
+.mapitem .n{font-weight:800;color:var(--accent);font-size:13px;letter-spacing:1px}
+.mapitem .t{font-size:14.5px;font-weight:700;display:block;margin-top:2px}
+
+/* ---------- station ---------- */
+.station{padding:58px 0 6px}
+.stnum{font-size:13px;font-weight:800;letter-spacing:2.5px;color:var(--accent)}
+h2{font-size:clamp(21px,3vw,29px);margin:6px 0 6px;line-height:1.35}
+.stsub{color:var(--ink2);margin:0 0 20px;font-size:15px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 10px;font-size:17px}
+.card p{margin:8px 0}
+.mut{color:var(--ink2);font-size:14px}
+.sim{display:inline-block;font-size:11.5px;background:#fff3bf;color:#8a6d00;border:1px solid #ffe08a;
+  border-radius:999px;padding:1px 9px;vertical-align:middle;margin-left:8px}
+.src{display:inline-block;font-size:11.5px;background:#e7f5ff;color:#1864ab;border:1px solid #b3d7ff;
+  border-radius:999px;padding:1px 9px;vertical-align:middle}
+
+/* 插卡 */
+.takeaway{background:#fff;border:1px solid #ffe08a;border-left:6px solid #F08C00;border-radius:12px;padding:14px 18px;margin:16px 0}
+.fun{background:#f8f0fc;border:1px solid #eebefa;border-radius:12px;padding:14px 18px;margin:16px 0}
+.warn{background:#fff0f0;border:1px solid #ffc9c9;border-left:6px solid #E03131;border-radius:12px;padding:14px 18px;margin:16px 0}
+
+/* ---------- buttons & controls ---------- */
+.btn{font:inherit;font-size:14px;padding:8px 18px;border-radius:9px;border:1px solid var(--line);
+  background:#fff;color:var(--ink);cursor:pointer;transition:.15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.08);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.ctrbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0}
+.segctl{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.segctl button{font:inherit;font-size:13.5px;border:0;background:transparent;padding:7px 16px;cursor:pointer;color:var(--ink2)}
+.segctl button.on{background:var(--ink);color:#fff}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:14px}
+.switch input{display:none}
+.switch .track{width:44px;height:24px;border-radius:999px;background:#dcd6c8;position:relative;transition:.2s}
+.switch .track::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.switch input:checked + .track{background:var(--green)}
+.switch input:checked + .track::after{left:23px}
+
+/* ---------- tokens ---------- */
+.tokrow{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0;align-items:flex-start}
+.tokwrap{display:flex;flex-direction:column;align-items:center;gap:4px}
+.tok{padding:7px 11px;border-radius:9px;border:2px solid;background:#fff;font-size:14.5px;cursor:pointer;
+  transition:.15s;min-width:34px;text-align:center;position:relative}
+.tok:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.tok.vis{box-shadow:0 0 0 3px rgba(47,158,68,.35)}
+.tok.dim{opacity:.28;filter:grayscale(.6)}
+.tok.sel{outline:3px solid var(--ink);outline-offset:2px}
+.posbadge{font-size:11px;font-family:ui-monospace,Menlo,monospace;color:var(--ink2);background:#f1ece1;
+  border-radius:5px;padding:0 6px;transition:.25s}
+.posbadge.rst{background:#d3f9d8;color:#2b8a3e;font-weight:700}
+.segtag{font-size:10.5px;font-weight:700;letter-spacing:.5px;margin-bottom:2px}
+.t-Q{border-color:var(--blue);color:#1864ab;background:#edf6ff}
+.t-C1{border-color:var(--green);color:#2b8a3e;background:#edf9ee}
+.t-C2{border-color:var(--purple);color:#5f3dc4;background:#f4f0fe}
+.t-C3{border-color:var(--pink);color:#a61e4d;background:#fdf0f5}
+.t-A{border-color:var(--teal);color:#0b7285;background:#e9fcfc}
+.info{min-height:30px;font-size:14px;color:var(--ink2);margin-top:8px}
+.info b{color:var(--ink)}
+.leaknote{display:none;background:#fff0f0;border:1px dashed #E03131;border-radius:10px;padding:10px 14px;
+  font-size:13.5px;color:#a61e00;margin-top:10px}
+.leaknote.show{display:block}
+
+/* ---------- bars ---------- */
+.bars{margin:10px 0}
+.brow{display:grid;grid-template-columns:120px 1fr 52px;gap:10px;align-items:center;margin:9px 0;font-size:14px}
+.brow .lab{display:flex;align-items:center;gap:6px;min-width:0}
+.brow .lab span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brow .track{background:#f1ece1;border-radius:999px;height:16px;overflow:hidden}
+.brow .fill{height:100%;width:0;border-radius:999px;transition:width .5s cubic-bezier(.22,1,.36,1)}
+.brow.win .lab{font-weight:800}
+.brow.win .pct{font-weight:800;color:var(--accent)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.verdict{font-size:14px;padding:9px 14px;border-radius:10px;margin-top:10px;display:inline-block}
+.v-ok{background:#d3f9d8;color:#2b8a3e;font-weight:700}
+.v-bad{background:#ffe3e3;color:#c92a2a;font-weight:700}
+
+/* option cards (demo B) */
+.optzone{display:flex;flex-direction:column;gap:9px}
+.opt{display:flex;align-items:center;gap:12px;background:#fff;border:2px solid var(--line);border-radius:12px;
+  padding:11px 16px;cursor:pointer;transition:.15s}
+.opt:hover{transform:translateX(3px)}
+.opt.sel{border-color:var(--ink);box-shadow:0 0 0 3px rgba(43,43,43,.15)}
+.optnum{width:26px;height:26px;border-radius:50%;background:#f1ece1;color:var(--ink2);display:flex;
+  align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:none}
+.opt .ot{font-weight:600}
+.opt .hint{font-size:12px;color:var(--ink2)}
+
+/* ab panels */
+.ab2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+.panel h4{margin:0 0 4px;font-size:15.5px}
+.panel .tag{font-size:12px;color:var(--ink2)}
+.genbox{min-height:96px;background:#fbf9f4;border:1px dashed var(--line);border-radius:10px;padding:10px 12px;font-size:14px;margin-top:8px}
+.gtok{display:inline-block;background:#eef6ff;border:1px solid #cde5ff;border-radius:6px;padding:1px 7px;margin:2px;animation:pop .18s}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+.flash{animation:flash .5s}
+@keyframes flash{0%{background:#fff3bf}100%{background:transparent}}
+
+/* ---------- matrix ---------- */
+.mxwrap{overflow-x:auto;padding-bottom:6px}
+.matrix{display:grid;grid-template-columns:34px repeat(14,26px);gap:2px;width:max-content;margin:6px 0}
+.hd{display:flex;align-items:center;justify-content:center;font-size:9.5px;font-family:ui-monospace,Menlo,monospace}
+.hd.c{color:transparent;position:relative}
+.hd.c::after{content:'';position:absolute;inset:2px;border-radius:4px}
+.hd.active{outline:2px solid var(--ink);outline-offset:1px;z-index:2;background:#3a3a3a;color:#fff}
+.hd.q::after{background:var(--blue)} .hd.c1::after{background:var(--green)}
+.hd.c2::after{background:var(--purple)} .hd.c3::after{background:var(--pink)} .hd.a::after{background:var(--teal)}
+.cell{width:26px;height:22px;border-radius:4px;background:#efe9dc;transition:.12s;cursor:pointer}
+.cell.on{background:#b8b1a2}
+.cell.on.fq{background:#a5c9ec}.cell.on.fc1{background:#a8dcb2}.cell.on.fc2{background:#c9b8f0}.cell.on.fc3{background:#f0aec7}.cell.on.fa{background:#9ed4dd}
+.cell.leak{box-shadow:0 0 0 2.5px #E03131 inset;background:#ffc9c9 !important}
+.cell:hover{transform:scale(1.18)}
+.mlegend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--ink2);margin-top:10px;align-items:center}
+.mlegend i{width:14px;height:11px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
+
+/* ---------- pipeline ---------- */
+.pipe{display:flex;flex-direction:column;gap:0;margin:14px 0}
+.pblock{background:#fff;border:2px solid var(--line);border-radius:13px;padding:13px 17px;transition:.25s;position:relative}
+.pblock + .pblock{margin-top:16px}
+.pblock.active{border-color:var(--accent);box-shadow:0 0 0 4px rgba(232,89,12,.12)}
+.pblock h4{margin:0;font-size:15.5px}
+.pblock .desc{font-size:13.5px;color:var(--ink2);margin-top:5px;display:none}
+.pblock.active .desc{display:block}
+.parrow{text-align:center;color:var(--accent);font-size:18px;line-height:1;margin:-6px 0}
+.layerstack{display:flex;flex-wrap:wrap;gap:3px;margin-top:9px}
+.lay{width:22px;height:13px;border-radius:3px;background:#dfe7f0;border:1px solid #c3d2e3}
+.lay.on{background:#8fb8e0;border-color:#6f9cd0}
+.lay.lora{background:var(--accent);border-color:#c74a08}
+.lay.off{background:#efe9dc;border-color:#e0d8c6;opacity:.6}
+.stepdots{display:flex;gap:7px;margin:4px 0 12px}
+.sdot{width:10px;height:10px;border-radius:50%;background:#dcd6c8;cursor:pointer;transition:.15s}
+.sdot.on{background:var(--accent);transform:scale(1.2)}
+.note{background:#fbf9f4;border:1px dashed var(--line);border-radius:10px;padding:10px 14px;font-size:13.5px;color:var(--ink2);min-height:44px}
+
+/* vs card */
+.vs2{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:stretch;margin:14px 0}
+.vs2 .side{border-radius:12px;padding:14px 16px;font-size:14px}
+.vs2 .side.win{background:#edf9ee;border:2px solid var(--green)}
+.vs2 .side.lose{background:#fff8f1;border:2px dashed var(--line)}
+.vs2 .mid{display:flex;align-items:center;font-weight:800;color:var(--accent);font-size:18px}
+.vs2 h4{margin:0 0 6px;font-size:15px}
+
+/* compare 3 */
+.cmp3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}
+.cmp3 .c{border-radius:12px;padding:14px 15px;border:2px solid var(--line);background:#fff;font-size:13.5px}
+.cmp3 .c h4{margin:0 0 6px;font-size:14.5px}
+.cmp3 .c.good{border-color:var(--green)}
+.cmp3 .c.bad2{border-color:#ffc9c9}
+
+/* quiz */
+details.quiz{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 18px;margin:10px 0}
+details.quiz summary{cursor:pointer;font-weight:600;font-size:15px;list-style:none;display:flex;gap:8px}
+details.quiz summary::before{content:'Q';color:var(--accent);font-weight:800}
+details.quiz[open] summary{margin-bottom:8px}
+details.quiz .ans{border-top:1px dashed var(--line);padding-top:10px;color:var(--ink2);font-size:14.5px}
+
+/* summary table */
+.onepage{background:#fff;border:2px solid var(--ink);border-radius:16px;padding:22px 26px;margin:18px 0}
+.onepage table{width:100%;border-collapse:collapse;font-size:14px}
+.onepage td{padding:8px 6px;border-bottom:1px dashed var(--line);vertical-align:top}
+.onepage td:first-child{font-weight:700;white-space:nowrap;color:var(--accent)}
+
+footer{margin:60px 0 40px;border-top:1px solid var(--line);padding-top:22px;font-size:13px;color:var(--ink2)}
+footer p{margin:6px 0}
+
+@media (max-width:760px){
+  .mapgrid{grid-template-columns:repeat(2,1fr)}
+  .grid2,.ab2{grid-template-columns:1fr}
+  .vs2{grid-template-columns:1fr}
+  .vs2 .mid{justify-content:center}
+  .cmp3{grid-template-columns:1fr}
+  .brow{grid-template-columns:96px 1fr 46px}
+}
+</style>
+</head>
+<body>
+<div id="pbar"></div>
+
+<!-- ================= HERO ================= -->
+<header class="hero wrap">
+  <div class="badgerow">
+    <span class="badge hot">交互式图解</span>
+    <span class="badge">来源：X 文章 · AVB (@neural_avb)</span>
+    <span class="badge">发布：2026-10-05</span>
+    <span class="badge">主题：Jev / System One 模型</span>
+  </div>
+  <h1>训练「选项顺序不变性」进 Jev 模型<br>——给因果语言模型动的一次矫正手术</h1>
+  <p class="sub">同一道题、同样的选项，只是换了个排列顺序，模型的答案就翻了。这篇交互式笔记拆解 AVB 的长文
+  《Training choice-order invariance into JEV models》：bug 出在哪、为什么 BERT 救不了、以及两把手术刀——位置编码重置与注意力掩码图。</p>
+
+  <div class="tldr">
+    <b>TL;DR</b>
+    <ul>
+      <li><b>Jev 这类 System One 模型</b>吃进「上下文 + 一组候选选项」，一次前向传播直接吐出每个选项的概率——不逐 token 生成。</li>
+      <li>但它微调自<b>因果语言模型</b>，后面的选项能「看到」前面的选项（注意力），而且位置编码随顺序改变——<b>换个排序，答案就翻</b>。</li>
+      <li>修复 = 同时 hack 两样东西：<b>① 每个「选项」的位置 ID 重新计数</b>（都以为自己紧跟在问题后面）；<b>② 注意力掩码剪掉选项之间的边</b>（保持因果性不破坏）。</li>
+      <li>作者用 Qwen3-0.6B 前 20 层 + LoRA + 700 万参数决策头，训出 <b>bev-decider-0.4B</b>，配套 27.6 万条数据开源。</li>
+    </ul>
+  </div>
+
+  <div class="metarow">
+    <a class="chiplink" href="https://x.com/neural_avb/status/2107173836273938662" target="_blank" rel="noopener">📄 原文（X 文章）</a>
+    <a class="chiplink" href="https://huggingface.co/datasets/avbiswas/bev-decision" target="_blank" rel="noopener">🗂 数据集 276K</a>
+    <a class="chiplink" href="https://huggingface.co/avbiswas/bev-decider-0.4B" target="_blank" rel="noopener">🤖 模型 bev-decider-0.4B</a>
+    <a class="chiplink" href="https://github.com/avbiswas/bev-train" target="_blank" rel="noopener">💻 GitHub bev-train</a>
+    <a class="chiplink" href="https://youtu.be/sF3CNPbWA8o" target="_blank" rel="noopener">▶️ 讲解视频</a>
+    <a class="chiplink" href="/projects/jev-cookbook/">📚 本站：Jev Cookbook</a>
+  </div>
+</header>
+
+<!-- ================= MAP ================= -->
+<nav class="map wrap">
+  <div class="mapgrid">
+    <a class="mapitem" href="#s1"><span class="n">01</span><span class="t">Jev：不写作文的阅卷老师</span></a>
+    <a class="mapitem" href="#s2"><span class="n">02</span><span class="t">顺序 bug：换序即翻车</span></a>
+    <a class="mapitem" href="#s3"><span class="n">03</span><span class="t">元凶：因果注意力</span></a>
+    <a class="mapitem" href="#s4"><span class="n">04</span><span class="t">BERT 为什么也救不了</span></a>
+    <a class="mapitem" href="#s5"><span class="n">05</span><span class="t">手术刀 ①：位置 ID 重置</span></a>
+    <a class="mapitem" href="#s6"><span class="n">06</span><span class="t">手术刀 ②：掩码即图</span></a>
+    <a class="mapitem" href="#s7"><span class="n">07</span><span class="t">组装 0.4B 决策模型</span></a>
+    <a class="mapitem" href="#s8"><span class="n">08</span><span class="t">边界 · 产出 · 一页带走</span></a>
+  </div>
+</nav>
+
+<!-- ================= S1 ================= -->
+<section class="station wrap" id="s1">
+  <div class="stnum">STATION 01</div>
+  <h2>Jev：不写作文的阅卷老师</h2>
+  <p class="stsub">生成式语言模型像学生写作文——一个字一个字往外蹦；Jev 这类 System One 模型像阅卷老师——扫一眼答题卡，直接给每个选项打分。</p>
+
+  <div class="card">
+    <h3>两种工作方式，肉眼可见的差别 <span class="sim">演示为模拟</span></h3>
+    <p class="mut">同一个分类问题：「这张工单该路由给谁？」——左：生成式 LM 逐 token 写出答案；右：Jev 一次前向传播直接给概率。点「开始对比」。</p>
+    <div class="ab2">
+      <div class="panel">
+        <h4>✍️ 生成式语言模型</h4>
+        <span class="tag">逐 token 生成（自回归）</span>
+        <div class="genbox" id="genbox"><span class="mut">点击「开始对比」…</span></div>
+        <p style="margin:8px 0 0"><b id="genCount">前向传播次数：0</b><br>
+        <span class="mut" id="genNote">每生成一个 token，都要做一次前向传播。</span></p>
+      </div>
+      <div class="panel" id="jevPanel">
+        <h4>⚡ Jev（System One 模型）</h4>
+        <span class="tag">输入 = 上下文 + 候选选项 → 一次前向传播</span>
+        <div class="bars" id="jevBars" style="margin-top:12px">
+          <div class="brow" data-k="bug"><div class="lab"><i class="dot" style="background:var(--green)"></i><span>🐞 Bug 报告</span></div><div class="track"><div class="fill" style="background:var(--green)"></div></div><div class="pct">0%</div></div>
+          <div class="brow" data-k="feat"><div class="lab"><i class="dot" style="background:var(--purple)"></i><span>✨ 功能请求</span></div><div class="track"><div class="fill" style="background:var(--purple)"></div></div><div class="pct">0%</div></div>
+          <div class="brow" data-k="acct"><div class="lab"><i class="dot" style="background:var(--pink)"></i><span>👤 账户问题</span></div><div class="track"><div class="fill" style="background:var(--pink)"></div></div><div class="pct">0%</div></div>
+        </div>
+        <p style="margin:8px 0 0"><b>前向传播次数：1</b>（全部概率一次出齐）<br>
+        <span class="mut">没有中间 token，没有解码循环。</span></p>
+      </div>
+    </div>
+    <div class="ctrbar"><button class="btn primary" id="abBtn">▶ 开始对比</button><span class="mut">模拟示意：左 15 个 token ≈ 15 次前向传播，右 1 次。</span></div>
+  </div>
+
+  <div class="cmp3">
+    <div class="c bad2"><h4>固定输出分类器</h4>情感分析模型永远只有「正面/中性/负面」三个出口。换个任务？重训一个。输出空间焊死在头上。</div>
+    <div class="c good"><h4>🧩 Jev：通用分类器</h4>输入「上下文 + 候选选项列表」，输出「这些选项各自的概率」。选项可以是退款/换货/维修，也可以是任意新东西——输出空间跟着输入走。</div>
+    <div class="c"><h4>作者与 Jev 的关系</h4>原文作者已把 Jev 集成进<b>两套线上生产系统</b>，并在文末感谢 Typesafe AI「复活了通用分类器这个想法」。</div>
+  </div>
+
+  <div class="takeaway">💡 <b>一句话记住：</b>Jev = 拿语言模型当「阅卷机器」用。阅卷不用写作文——但正因如此，它继承了语言模型的一个隐藏缺陷，下一站我们把 bug 抓出来。</div>
+</section>
+
+<!-- ================= S2 ================= -->
+<section class="station wrap" id="s2">
+  <div class="stnum">STATION 02</div>
+  <h2>顺序 bug：换个排序，答案就翻</h2>
+  <p class="stsub">原文作者观察到的现象：同一道题、同样的选项，只是把选项的左右位置互换，Jev 的答案就变了。下面复现这个现象——你来当那个「换顺序的手」。</p>
+
+  <div class="card">
+    <h3>工单路由实验 <span class="sim">概率为教学模拟，复现原文描述的现象</span></h3>
+    <div class="grid2">
+      <div>
+        <p style="margin-top:0"><b>上下文（工单）：</b>「用户报告：应用在导出 PDF 时崩溃，附了堆栈跟踪。」<br>
+        <span class="mut">正确路由：<b style="color:var(--green)">🐞 Bug 报告处理</b>（工单明说了「崩溃」）。</span></p>
+        <p class="mut" style="font-size:13.5px">👇 <b>点击两个选项卡可以交换它们的位置</b>（先点一个，再点另一个）。</p>
+        <div class="optzone" id="optzone"></div>
+        <div class="ctrbar">
+          <button class="btn" id="shufBtn">🎲 随机打乱</button>
+          <button class="btn" id="resetBtn">↺ 复原顺序</button>
+        </div>
+      </div>
+      <div>
+        <p style="margin-top:0"><b>对照组 A：普通因果 LM 微调</b>（顺序敏感）</p>
+        <div class="bars" id="barsVanilla"></div>
+        <p id="verdictVanilla" style="margin-top:2px"></p>
+        <hr style="border:0;border-top:1px dashed var(--line);margin:14px 0">
+        <p style="margin-top:0"><b>对照组 B：本文的不变模型</b>（顺序无关）</p>
+        <div class="bars" id="barsInv"></div>
+        <p id="verdictInv" style="margin-top:2px"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway">💡 <b>为什么这很严重：</b>一个「正确答案取决于选项排列顺序」的分类器，没法放进任何生产管线——上游系统怎么拼接选项，居然在影响下游的决策。而且这不是 Jev 独有：任何在因果 LM 上微调出来的「选项打分器」都带着这个胎记。原文用词很谨慎：<b>「很可能（likely）因为 Jev 微调自因果语言模型」</b>。</div>
+</section>
+
+<!-- ================= S3 ================= -->
+<section class="station wrap" id="s3">
+  <div class="stnum">STATION 03</div>
+  <h2>元凶：因果注意力</h2>
+  <p class="stsub">因果语言模型的每个 token 只能「看见」它前面的 token——这是下一 token 预测的支柱。但当选项们排成一列进序列，后面的选项就偷看了前面的选项。</p>
+
+  <div class="card">
+    <h3>谁看到了谁？点击任意 token <span class="sim">14-token 示意序列</span></h3>
+    <p class="mut" style="margin-top:4px">序列结构 = <b style="color:var(--blue)">问题</b> + <b style="color:var(--green)">选项A</b> + <b style="color:var(--purple)">选项B</b> + <b style="color:var(--pink)">选项C</b> + <b style="color:var(--teal)">答案提示</b>。点一个 token，亮起的是它<b>能看到的</b>。</p>
+    <div class="tokrow" id="row3"></div>
+    <div class="info" id="info3"></div>
+    <div class="leaknote" id="leak3">🚨 <b>特权信息泄漏！</b>这个 token 属于某个选项，但它能「看到」排在它前面的其他选项——在真实打分场景里，这相当于选项 B 答题前偷瞄了选项 A 的卷子。原文的原话：「现实的织物被 fcked 了（the fabric of reality is fcked）」。</div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>因果性：下一 token 预测的支柱</h3>
+      <p>位置 10 的 token 只能对 0–9 做 attention；每个 token 的表示完全由<b>过去</b>决定，而这个表示恰好被拿来预测<b>未来</b>。训练目标本身要求信息只能单向流动。</p>
+      <p class="mut">所以这不是 bug，是因果 LM 的设计本意——只是把它拿来做「选项打分」时，本意变成了漏洞。</p>
+    </div>
+    <div class="card">
+      <h3>泄漏是怎么发生的</h3>
+      <p>把 <code>context choice-1 choice-2 choice-3</code> 排进因果序列：</p>
+      <ul style="margin:6px 0;padding-left:1.2em;font-size:14.5px">
+        <li>choice-1 看到：问题</li>
+        <li>choice-2 看到：问题 + <b>choice-1</b></li>
+        <li>choice-3 看到：问题 + <b>choice-1 + choice-2</b></li>
+      </ul>
+      <p class="mut">越靠后的选项「知道」得越多——它们的隐藏状态从出生就不平等。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= S4 ================= -->
+<section class="station wrap" id="s4">
+  <div class="stnum">STATION 04</div>
+  <h2>BERT 为什么也救不了</h2>
+  <p class="stsub">直觉方案：换成双向模型（BERT / ModernBERT），每个 token 都能看到所有 token，总该平等了吧？——不够。因为还有第二个泄密者：位置编码。</p>
+
+  <div class="card">
+    <h3>实验台：双向注意力 + 换序 <span class="sim">交互示意</span></h3>
+    <div class="ctrbar">
+      <label class="switch"><input type="checkbox" id="biToggle"><span class="track"></span>双向注意力（BERT 模式）</label>
+      <button class="btn" id="swapBtn">🔄 交换选项 B / C</button>
+    </div>
+    <div class="tokrow" id="row4"></div>
+    <div class="info" id="info4">先打开「双向注意力」开关，再点 token 试试；然后点「交换 B / C」看下面发生什么。</div>
+  </div>
+
+  <div class="cmp3">
+    <div class="c bad2"><h4>只修注意力？❌</h4>双向化后每个选项都能看到其他选项——至少「平等」了。但每个 token 的隐藏状态里还掺着<b>位置编码</b>：它在序列里排第几，一眼就被出卖。</div>
+    <div class="c bad2"><h4>只做数据增强？⚠️</h4>训练时把选项顺序随机打乱（age-old 老办法）确实能缓解，让模型「见过各种排列」。但这是统计层面的补丁，<b>并不从机制上让模型对顺序不敏感</b>——机制性的偏置还在。</div>
+    <div class="c good"><h4>真正要做的 ✅</h4>让「无论选项怎么排，每个选项的表示都一模一样」。要动的是<b>两处根基：位置编码 + 注意力掩码</b>——接下来两站各讲一把手术刀。</div>
+  </div>
+</section>
+
+<!-- ================= S5 ================= -->
+<section class="station wrap" id="s5">
+  <div class="stnum">STATION 05</div>
+  <h2>手术刀 ①：位置 ID 重置</h2>
+  <p class="stsub">每个选项都该以为自己「紧跟在问题后面」——因为在模型眼里，问题后面第一个位置，就是它唯一合法的出生地。</p>
+
+  <div class="card">
+    <h3>位置 ID 编辑器 <span class="sim">token 下方数字 = 位置编码 ID</span></h3>
+    <div class="ctrbar">
+      <label class="switch"><input type="checkbox" id="posToggle"><span class="track"></span>每个选项重置计数器（本文方案）</label>
+    </div>
+    <div class="tokrow" id="row5"></div>
+    <div class="info" id="info5">标准模式：位置 ID 从头数到尾，顺序即身份。</div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>原文的做法</h3>
+      <ul style="padding-left:1.2em;font-size:14.5px;margin:6px 0">
+        <li>问题 token：正常计数 0, 1, 2 …</li>
+        <li><b>每个选项：都从「问题结束后的第一个位置」重新开始数</b>——选项 A、B、C 拿到完全相同的位置 ID</li>
+        <li>答案 token：在选项之后继续计数</li>
+      </ul>
+      <p class="mut">从每个选项自己的视角看，它永远紧跟在问题后面——位置这一维度，再也区分不出「谁先谁后」。</p>
+    </div>
+    <div class="card">
+      <h3>副作用：答案 token 会「晕」</h3>
+      <p>打开重置后，三个选项在位置轴上<b>完全重叠</b>；答案 token 要「在选项之后继续数」，等于要求它把一堆互相重叠的东西看作依次排开——很反直觉。</p>
+      <p class="mut">原文态度：确实晕，但 <b>LoRA 微调后模型能恢复</b>。手术有代价，可控。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= S6 ================= -->
+<section class="station wrap" id="s6">
+  <div class="stnum">STATION 06</div>
+  <h2>手术刀 ②：注意力掩码即图</h2>
+  <p class="stsub">注意力掩码的本质是一张图：节点是 token，边是「允许看」。既然选项之间的边是泄漏通道——那就直接剪断。</p>
+
+  <div class="card">
+    <h3>掩码矩阵切换器 <span class="sim">行 = 看的人，列 = 被看的对象</span></h3>
+    <div class="ctrbar">
+      <div class="segctl" id="maskCtl">
+        <button class="on" data-m="std">标准因果掩码</button>
+        <button data-m="fix">本文掩码（选项隔离）</button>
+      </div>
+      <span class="mut" id="leakCount"></span>
+    </div>
+    <div class="mxwrap"><div class="matrix" id="mx"></div></div>
+    <div class="info" id="info6"></div>
+    <div class="mlegend">
+      <span><i style="background:#b8b1a2"></i>允许看（颜色=对方所属段）</span>
+      <span><i style="background:#efe9dc"></i>禁止看</span>
+      <span><i style="background:#ffc9c9;box-shadow:0 0 0 2px #E03131 inset"></i>特权泄漏（标准掩码独有）</span>
+      <span class="mut">点击行首的行号可查看该 token 的视野</span>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>本文掩码的三条规则 <span class="src">出自原文</span></h3>
+      <ul style="padding-left:1.2em;font-size:14.5px;margin:6px 0">
+        <li><b>问题 token</b>：照常因果——只看自己前面的</li>
+        <li><b>每个选项 token</b>：只看「整个问题 + 本选项内部的过往」，<b>绝不看其他选项</b></li>
+        <li><b>答案 token</b>：看全部</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>关键：依然是因果的</h3>
+      <p>这套掩码<b>没有破坏因果性</b>——每个 token 依然只往前看，只是选项之间的边被剪掉了。Qwen 不需要学习一种全新的注意力范式，预训练的功夫全保得住。</p>
+      <p class="mut">这正是「能移植就不重训」路线能走通的前提。</p>
+    </div>
+  </div>
+
+  <div class="warn">⚠️ <b>原文的免责声明：</b>以上分析假设模型使用标准的全注意力（full attention）。现代模型若混用滑动窗口注意力（sliding window）或线性注意力（如 <b>Qwen3.5 混合 Gated DeltaNet</b>），控制 token 可见性会困难得多。</div>
+</section>
+
+<!-- ================= S7 ================= -->
+<section class="station wrap" id="s7">
+  <div class="stnum">STATION 07</div>
+  <h2>组装一台 0.4B 决策模型</h2>
+  <p class="stsub">不从头训——直接「移植」：取一个预训练好的语言模型（原文建议：预训练之后、RL 之前的阶段），切掉顶层，接一个轻量决策头。</p>
+
+  <div class="vs2">
+    <div class="side lose"><h4>双编码器（bi-encoder）</h4>状态/问题与每个选项<b>分别</b>编码，用对比损失拉近匹配对。灵活省显存，但上下文和选项「见面」太晚。</div>
+    <div class="mid">VS</div>
+    <div class="side win"><h4>联合编码器（joint-encoder）✅ 本文选择</h4>问题 + 全部选项 + 答案提示<b>打包进同一条序列</b>，一次前向传播。更吃 GPU 显存（序列更长），但<b>更快、架构更灵活</b>。</div>
+  </div>
+
+  <div class="card">
+    <h3>流水线步进器 <span class="src">结构数字均出自原文</span></h3>
+    <div class="stepdots" id="sdots"></div>
+    <div class="note" id="pnote"></div>
+    <div class="pipe">
+      <div class="pblock" data-s="0">
+        <h4>① 序列打包（joint-encoder）</h4>
+        <div class="desc">任务提示（Choice / Noul / Score 三类题型之一）+ 问题 + 选项×3 + 「The answer:」提示 → 拼成一条序列。抽表示时还能感知题型。</div>
+        <div class="tokrow">
+          <span class="tok t-A" style="cursor:default">Choice</span><span class="tok t-Q" style="cursor:default">请把这张工单分类？</span><span class="tok t-C1" style="cursor:default">A·退款</span><span class="tok t-C2" style="cursor:default">B·换货</span><span class="tok t-C3" style="cursor:default">C·维修</span><span class="tok t-A" style="cursor:default">The answer:</span>
+        </div>
+      </div>
+      <div class="parrow">↓</div>
+      <div class="pblock" data-s="1">
+        <h4>② 骨干前向：Qwen3-0.6B 前 20 层（共 28 层）</h4>
+        <div class="desc">只用前 20 层——最后几层忙于「预测下一个 token」，中间层才是更通用的特征层。第 9–20 层（20 层里的后 12 层）挂 LoRA，承载大部分新学习。</div>
+        <div class="layerstack" id="layerstack"></div>
+        <p class="mut" style="margin:6px 0 0;font-size:12.5px"><i class="dot" style="background:#8fb8e0"></i> 保留冻结　<i class="dot" style="background:var(--accent)"></i> LoRA（第 9–20 层）　<i class="dot" style="background:#efe9dc"></i> 弃用（21–28 层）</p>
+      </div>
+      <div class="parrow">↓</div>
+      <div class="pblock" data-s="2">
+        <h4>③ 抽取表示</h4>
+        <div class="desc">每个选项取「该选项最后一个内容 token」的隐藏状态，再取序列最后一个 token 的表示——因果 LM 本来就会在末位为「预测下一个 token」积累完整信息。</div>
+        <div class="tokrow">
+          <span class="tok t-Q" style="cursor:default;opacity:.55">请把这张工单分类？</span><span class="tok t-C1" style="cursor:default">A·退款</span><span class="tok t-C2" style="cursor:default">B·换货</span><span class="tok t-C3" style="cursor:default">C·维修</span><span class="tok t-A" style="cursor:default">The answer:</span>
+        </div>
+        <p class="mut" style="margin:6px 0 0;font-size:12.5px">亮着的 4 个 token：每个选项的最后内容 token ×3 + 序列末 token ×1。</p>
+      </div>
+      <div class="parrow">↓</div>
+      <div class="pblock" data-s="3">
+        <h4>④ 决策头（+7M 参数）</h4>
+        <div class="desc">2 层 Self-Attention + MLP + <b>双线性头</b>，把选项表示和答案表示组合成每个选项的 logit；任务 embedding 让它知道当前是 Choice / Noul / Score 哪种题型。</div>
+        <p class="mut" style="margin:6px 0 0;font-size:13px">选项表示 ×3 ＋ 答案表示 ×1 → <code>SelfAttn ×2 → MLP → 双线性</code> → 3 个 logit</p>
+      </div>
+      <div class="parrow">↓</div>
+      <div class="pblock" data-s="4">
+        <h4>⑤ Softmax → 概率</h4>
+        <div class="desc">一次前向传播的终点：每个选项一个概率。顺序不变性由上游的位置重置 + 掩码保证。</div>
+        <div class="bars" style="max-width:420px">
+          <div class="brow win"><div class="lab"><i class="dot" style="background:var(--green)"></i><span>🐞 Bug 报告</span></div><div class="track"><div class="fill" style="background:var(--green);width:62%"></div></div><div class="pct">62%</div></div>
+          <div class="brow"><div class="lab"><i class="dot" style="background:var(--purple)"></i><span>✨ 功能请求</span></div><div class="track"><div class="fill" style="background:var(--purple);width:24%"></div></div><div class="pct">24%</div></div>
+          <div class="brow"><div class="lab"><i class="dot" style="background:var(--pink)"></i><span>👤 账户问题</span></div><div class="track"><div class="fill" style="background:var(--pink);width:14%"></div></div><div class="pct">14%</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="ctrbar">
+      <button class="btn primary" id="pPrev">← 上一步</button>
+      <button class="btn primary" id="pNext">下一步 →</button>
+      <button class="btn" id="pReset">↺ 重置</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>参数账本 <span class="src">全部出自原文</span>　<span class="mut" style="font-size:12px">✳ 号为本页推算</span></h3>
+    <table style="width:100%;border-collapse:collapse;font-size:14.5px">
+      <tr><td style="padding:6px 4px;border-bottom:1px dashed var(--line)"><b>基座</b></td><td style="padding:6px 4px;border-bottom:1px dashed var(--line)">Qwen3-0.6B（28 层）→ 只取<b>前 20 层</b></td></tr>
+      <tr><td style="padding:6px 4px;border-bottom:1px dashed var(--line)"><b>微调</b></td><td style="padding:6px 4px;border-bottom:1px dashed var(--line)">LoRA 挂在 20 层中的<b>后 12 层</b>（第 9–20 层）</td></tr>
+      <tr><td style="padding:6px 4px;border-bottom:1px dashed var(--line)"><b>决策头</b></td><td style="padding:6px 4px;border-bottom:1px dashed var(--line)">2 层 Self-Attention + MLP + 双线性头，<b>+7M 参数</b></td></tr>
+      <tr><td style="padding:6px 4px;border-bottom:1px dashed var(--line)"><b>训练数据</b></td><td style="padding:6px 4px;border-bottom:1px dashed var(--line)">276K 样本（开源 <code>avbiswas/bev-decision</code>）</td></tr>
+      <tr><td style="padding:6px 4px"><b>产出模型</b></td><td style="padding:6px 4px"><code>bev-decider-0.4B</code> ✳ 20/28 层 ≈ 0.43B，与 0.4B 命名吻合</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ================= S8 ================= -->
+<section class="station wrap" id="s8">
+  <div class="stnum">STATION 08</div>
+  <h2>边界 · 产出 · 一页带走</h2>
+  <p class="stsub">一次两周的实战记录：造数据、训模型、把「顺序不变性」焊进架构里。</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>📦 全部开源产出 <span class="src">出自原文</span></h3>
+      <ul style="padding-left:1.2em;font-size:14.5px;margin:6px 0">
+        <li>数据集：<a href="https://huggingface.co/datasets/avbiswas/bev-decision" target="_blank" rel="noopener">avbiswas/bev-decision</a>（276K 样本）</li>
+        <li>模型：<a href="https://huggingface.co/avbiswas/bev-decider-0.4B" target="_blank" rel="noopener">avbiswas/bev-decider-0.4B</a></li>
+        <li>代码：<a href="https://github.com/avbiswas/bev-train" target="_blank" rel="noopener">github.com/avbiswas/bev-train</a></li>
+        <li>讲解：<a href="https://youtu.be/sF3CNPbWA8o" target="_blank" rel="noopener">长视频</a> + 一场 5 小时直播编程回放</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>🧪 适用边界</h3>
+      <ul style="padding-left:1.2em;font-size:14.5px;margin:6px 0">
+        <li>掩码/位置方案假设<b>标准全注意力</b>；滑动窗口、线性注意力（Qwen3.5 的 Gated DeltaNet）会让「控制可见性」难得多</li>
+        <li>「Jev 微调自因果 LM」是作者的<b>推测（likely）</b>，不是官方架构披露</li>
+        <li>位置重置会让答案 token「晕」——靠 LoRA 恢复，是有代价的手术</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="onepage">
+    <h3 style="margin-top:0">🧾 一页带走</h3>
+    <table>
+      <tr><td>问题</td><td>选项打分模型对「选项排列顺序」敏感——换序即换答案</td></tr>
+      <tr><td>元凶 ×2</td><td>因果注意力让后面的选项偷看前面的选项；位置编码出卖每个 token 的座次</td></tr>
+      <tr><td>手术刀 ①</td><td>每个选项的位置 ID 都从「问题结束后」重新计数——三选项位置完全重叠</td></tr>
+      <tr><td>手术刀 ②</td><td>注意力掩码当作图来剪：选项之间不连边，答案 token 看全部，因果性保持不破坏</td></tr>
+      <tr><td>载体</td><td>Qwen3-0.6B 前 20/28 层 + 后 12 层 LoRA + 7M 参数决策头（2×SelfAttn + 双线性头 + 任务 embedding）</td></tr>
+      <tr><td>产出</td><td>bev-decider-0.4B + 276K 数据集 + 开源代码</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>🎯 自测四题（点开看答案）</h3>
+    <details class="quiz"><summary>为什么因果 LM 微调出的选项打分器会「换序即翻车」？</summary><div class="ans">两个机制叠加：① 因果注意力让靠后的选项能看到靠前的选项（特权信息随位置增加）；② 位置编码让每个 token 的表示携带座次信息。两者都随排列顺序改变，所以隐藏状态、logit 全都跟着变。</div></details>
+    <details class="quiz"><summary>把骨干换成 BERT（双向注意力）能根治吗？</summary><div class="ans">不能。双向化解决了「看不到」，但位置编码仍在——token 换个位置，隐藏状态照样变。数据增强（训练时随机打乱选项）也只是统计补丁，不改变机制性偏置。</div></details>
+    <details class="quiz"><summary>本文让每个选项「以为自己紧跟在问题后面」，具体改了什么？</summary><div class="ans">位置 ID：问题正常计数，每个选项都从问题结束后的第一个位置重新开始数（三选项 ID 完全重叠）；答案 token 在选项之后继续计数。配套的注意力掩码剪掉选项之间的边，问题段保持因果，答案 token 看全部。</div></details>
+    <details class="quiz"><summary>为什么这套掩码方案对 Qwen 特别友好？</summary><div class="ans">因为剪边之后每个 token 依然只往前看——因果性没被破坏，模型不需要学新的注意力范式，预训练能力可以整体继承，只需 LoRA 适配。</div></details>
+  </div>
+
+  <div class="fun">🥚 <b>彩蛋：为什么叫 System One？</b>——这个名字借自卡尼曼《思考，快与慢》的双系统理论：System 1 快而直觉（一次前向传播出全部概率），System 2 慢而审慎（逐 token 生成、边想边写）。Jev 做的事，就是给大模型装一个「快思考」的出口。<span class="mut">（延伸联想，非原文内容）</span></div>
+</section>
+
+<footer class="wrap">
+  <p><b>内容依据：</b>AVB《Training choice-order invariance into JEV models》（X 文章，2026-10-05，<a href="https://x.com/neural_avb/status/2107173836273938662" target="_blank" rel="noopener">原文链接</a>）。本页为交互式学习笔记与二次图解，非原文翻译；所有插图为本页重绘。</p>
+  <p><b>事实与模拟的边界：</b>结构性数字（276K 样本、Qwen3-0.6B、28 层取前 20、LoRA 后 12 层、+7M 决策头、2 层 Self-Attention、bev-decider-0.4B、5 小时直播）均出自原文；带「演示为模拟」徽标的概率数字、token 序列与注意力可视化是教学示意，非真实模型输出。✳ 号为本页推算。</p>
+  <p><b>相关：</b>Jev 由 Typesafe AI 开发（原文作者致谢）· 本站 <a href="/projects/jev-cookbook/">Jev Cookbook 项目页</a> · 制作：王熠明 Bald0Wang，2026-10-06</p>
+</footer>
+
+<script>
+'use strict';
+/* ================= 公共数据 ================= */
+var SEGS=[
+ {id:'Q', cls:'t-Q', color:'#1C7ED6', name:'问题'},
+ {id:'C1',cls:'t-C1',color:'#2F9E44', name:'选项A'},
+ {id:'C2',cls:'t-C2',color:'#7048E8', name:'选项B'},
+ {id:'C3',cls:'t-C3',color:'#D6336C', name:'选项C'},
+ {id:'A', cls:'t-A', color:'#1098AD', name:'答案提示'}
+];
+var TOKS=[
+ {t:'请',s:'Q'},{t:'把',s:'Q'},{t:'这张',s:'Q'},{t:'工单',s:'Q'},{t:'分类',s:'Q'},{t:'？',s:'Q'},
+ {t:'A·',s:'C1'},{t:'退款',s:'C1'},
+ {t:'B·',s:'C2'},{t:'换货',s:'C2'},
+ {t:'C·',s:'C3'},{t:'维修',s:'C3'},
+ {t:'The',s:'A'},{t:'answer:',s:'A'}
+];
+function segOf(i){return TOKS[i].s;}
+function segStart(sid){for(var k=0;k<TOKS.length;k++){if(TOKS[k].s===sid)return k;}return -1;}
+
+/* 掩码 */
+function maskStd(i,j){return j<=i;}
+function maskFix(i,j){
+  var si=segOf(i),sj=segOf(j);
+  if(si==='Q')return j<=i;                              // 问题：照常因果
+  if(si.charAt(0)==='C')return sj==='Q'||(sj===si&&j<=i); // 选项：问题+本选项过往
+  return sj!=='A'||j<=i;                                // 答案：全部问题与选项，自身段内因果
+}
+/* 位置 */
+function posStd(i){return i;}
+function posReset(i){
+  var s=segOf(i);
+  if(s==='Q')return i;
+  if(s.charAt(0)==='C')return 6+(i-segStart(s)); // 每个选项都从 6 开始
+  return 8+(i-segStart('A'));                     // 答案在选项之后继续
+}
+
+/* ================= 进度条 ================= */
+addEventListener('scroll',function(){
+  var h=document.documentElement;
+  document.getElementById('pbar').style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%';
+});
+
+/* ================= S1: A/B 对比 ================= */
+(function(){
+  var GEN=['答案','是','A','。','因为','工单','描述','的','是','崩溃','，','属于','Bug','报告','。'];
+  var box=document.getElementById('genbox'),cnt=document.getElementById('genCount'),
+      note=document.getElementById('genNote'),btn=document.getElementById('abBtn'),panel=document.getElementById('jevPanel');
+  var JEV={bug:12,feat:73,acct:15};
+  btn.addEventListener('click',function(){
+    btn.disabled=true;box.innerHTML='';cnt.textContent='前向传播次数：0';
+    var k=0;
+    var tm=setInterval(function(){
+      var sp=document.createElement('span');sp.className='gtok';sp.textContent=GEN[k];
+      box.appendChild(sp);k++;cnt.textContent='前向传播次数：'+k;
+      if(k>=GEN.length){
+        clearInterval(tm);
+        note.textContent='共 '+k+' 个 token ≈ '+k+' 次前向传播，才写完一句话。';
+        panel.classList.add('flash');
+        var rows=panel.querySelectorAll('.brow');
+        rows.forEach(function(r){
+          r.querySelector('.fill').style.width=JEV[r.dataset.k]+'%';
+          r.querySelector('.pct').textContent=JEV[r.dataset.k]+'%';
+        });
+        var maxK=Object.keys(JEV).reduce(function(a,b){return JEV[a]>=JEV[b]?a:b;});
+        panel.querySelector('[data-k='+maxK+']').classList.add('win');
+        setTimeout(function(){panel.classList.remove('flash');btn.disabled=false;},600);
+      }
+    },130);
+  });
+})();
+
+/* ================= S2: 选项重排实验 ================= */
+(function(){
+  var OPTS=[
+    {id:'bug', icon:'🐞', label:'Bug 报告处理', hint:'崩溃、堆栈跟踪', base:1.6, color:'#2F9E44'},
+    {id:'feat',icon:'✨', label:'功能请求',     hint:'希望支持…',      base:1.35,color:'#7048E8'},
+    {id:'acct',icon:'👤', label:'账户问题',     hint:'登录、 billing', base:1.15,color:'#D6336C'}
+  ];
+  var BIAS=[0,0.55,1.1]; // 越靠后看到越多上下文（模拟位置偏置）
+  var INIT=['bug','feat','acct'];
+  var order=INIT.slice(),selected=null;
+  var zone=document.getElementById('optzone'),bv=document.getElementById('barsVanilla'),
+      bi=document.getElementById('barsInv'),vv=document.getElementById('verdictVanilla'),
+      vi=document.getElementById('verdictInv');
+
+  function soft(logits){
+    var m=Math.max.apply(null,logits);
+    var e=logits.map(function(x){return Math.exp(x-m);});
+    var s=e.reduce(function(a,b){return a+b;},0);
+    return e.map(function(x){return Math.round(x/s*100);});
+  }
+  function renderBars(elm,probs,colors,labels,icons){
+    elm.innerHTML='';
+    var maxI=probs.indexOf(Math.max.apply(null,probs));
+    probs.forEach(function(p,i){
+      var r=document.createElement('div');r.className='brow'+(i===maxI?' win':'');
+      r.innerHTML='<div class="lab"><i class="dot" style="background:'+colors[i]+'"></i><span>'+icons[i]+' '+labels[i]+'</span></div>'+
+        '<div class="track"><div class="fill" style="background:'+colors[i]+';width:'+p+'%"></div></div><div class="pct">'+p+'%</div>';
+      elm.appendChild(r);
+    });
+  }
+  function byId(id){return OPTS.filter(function(o){return o.id===id;})[0];}
+  function update(){
+    // 渲染选项卡
+    zone.innerHTML='';
+    order.forEach(function(id,idx){
+      var o=byId(id),d=document.createElement('div');
+      d.className='opt'+(selected===id?' sel':'');
+      d.innerHTML='<span class="optnum">'+(idx+1)+'</span><span class="ot">'+o.icon+' '+o.label+'</span><span class="hint">'+o.hint+'</span>';
+      d.addEventListener('click',function(){
+        if(selected===null){selected=id;}
+        else if(selected===id){selected=null;}
+        else{
+          var a=order.indexOf(selected),b=order.indexOf(id);
+          order[a]=id;order[b]=selected;selected=null;
+        }
+        update();
+      });
+      zone.appendChild(d);
+    });
+    // 香草模型：内容 logit + 位置偏置
+    var vl=order.map(function(id,idx){return byId(id).base+BIAS[idx];});
+    var vp=soft(vl);
+    renderBars(bv,vp,order.map(function(id){return byId(id).color;}),order.map(function(id){return byId(id).label;}),order.map(function(id){return byId(id).icon;}));
+    var vWin=order[vp.indexOf(Math.max.apply(null,vp))];
+    vv.innerHTML=vWin==='bug'?'<span class="verdict v-ok">✓ 路由正确</span>':'<span class="verdict v-bad">✗ 路由错误：答成了「'+byId(vWin).label+'」</span>';
+    // 不变模型：只看内容
+    var ip=soft(OPTS.map(function(o){return o.base;}));
+    renderBars(bi,ip,OPTS.map(function(o){return o.color;}),OPTS.map(function(o){return o.label;}),OPTS.map(function(o){return o.icon;}));
+    vi.innerHTML='<span class="verdict v-ok">✓ 无论怎么排，都是 Bug 报告</span>';
+  }
+  document.getElementById('shufBtn').addEventListener('click',function(){
+    for(var i=order.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=order[i];order[i]=order[j];order[j]=t;}
+    selected=null;update();
+  });
+  document.getElementById('resetBtn').addEventListener('click',function(){order=INIT.slice();selected=null;update();});
+  update();
+})();
+
+/* ================= S3: 因果注意力可视化 ================= */
+function makeRow(elm,opts){
+  var SRC=(opts&&opts.src)||TOKS;
+  elm.innerHTML='';
+  SRC.forEach(function(tk,i){
+    var w=document.createElement('div');w.className='tokwrap';
+    var t=document.createElement('div');t.className='tok '+segCls(tk.s);t.textContent=tk.t;
+    if(opts&&opts.badge){var b=document.createElement('div');b.className='posbadge'+(opts.badge(i)?' rst':'');b.textContent=opts.badgeText(i);w.appendChild(b);}
+    w.insertBefore(t,w.firstChild);
+    if(opts&&opts.click)t.addEventListener('click',function(){opts.click(i);});
+    else t.style.cursor='default';
+    elm.appendChild(w);
+  });
+  return Array.prototype.slice.call(elm.querySelectorAll('.tok'));
+}
+function segCls(s){return SEGS.filter(function(x){return x.id===s;})[0].cls;}
+function segName(s){return SEGS.filter(function(x){return x.id===s;})[0].name;}
+function segColor(s){return SEGS.filter(function(x){return x.id===s;})[0].color;}
+
+(function(){
+  var row=document.getElementById('row3'),info=document.getElementById('info3'),leak=document.getElementById('leak3');
+  var toks=makeRow(row,{click:pick});
+  function pick(i){
+    toks.forEach(function(t,j){
+      t.classList.remove('vis','dim','sel');
+      if(maskStd(i,j))t.classList.add('vis');else t.classList.add('dim');
+    });
+    toks[i].classList.add('sel');
+    var parts=countBySeg(i);
+    var txt='第 <b>'+i+'</b> 个 token（<b style="color:'+segColor(TOKS[i].s)+'">'+segName(TOKS[i].s)+'</b>）能看到 <b>'+(i+1)+'</b> 个 token：';
+    txt+=parts.map(function(p){return '<b style="color:'+segColor(p.s)+'">'+p.n+'×'+p.label+'</b>';}).join('、');
+    info.innerHTML=txt;
+    var isC=TOKS[i].s.charAt(0)==='C';
+    var seesOther=isC&&['C1','C2','C3'].some(function(s){return s!==TOKS[i].s&&parts.some(function(p){return p.s===s;});});
+    leak.classList.toggle('show',!!seesOther);
+  }
+  function countBySeg(i){
+    var m={};for(var j=0;j<=i;j++){m[TOKS[j].s]=(m[TOKS[j].s]||0)+1;}
+    return SEGS.filter(function(s){return m[s.id];}).map(function(s){return {s:s.id,label:s.name,n:m[s.id]};});
+  }
+  pick(10); // 默认展示 C3 第一个 token 的泄漏
+})();
+
+/* ================= S4: 双向 + 换序 ================= */
+(function(){
+  var row=document.getElementById('row4'),info=document.getElementById('info4'),
+      bi=document.getElementById('biToggle'),swap=document.getElementById('swapBtn');
+  var local=TOKS.slice(),picked=-1;
+  function draw(){
+    makeRow(row,{src:local,badge:function(){return false;},badgeText:function(i){return i;},click:pick});
+    if(picked>=0)mark(picked);
+  }
+  function pick(i){
+    picked=i;mark(i);
+  }
+  function mark(i){
+    var els=row.querySelectorAll('.tok');
+    els.forEach(function(t,j){
+      t.classList.remove('vis','dim','sel');
+      var ok=bi.checked?true:maskStd(i,j);
+      if(ok)t.classList.add('vis');else t.classList.add('dim');
+    });
+    els[i].classList.add('sel');
+    var n=bi.checked?local.length:(i+1);
+    var extra=bi.checked?' <b>（双向模式：所有 token 互相可见）</b>':'';
+    var posNote=' 它的位置编码 ID 是 <b>'+i+'</b>——换序后这个数字会变，hidden state 也会跟着变。';
+    info.innerHTML='第 <b>'+i+'</b> 个 token 能看到 <b>'+n+'</b> 个 token。'+extra+'<br>'+posNote;
+  }
+  bi.addEventListener('change',function(){if(picked<0)picked=10;mark(picked);});
+  swap.addEventListener('click',function(){
+    var q=local.slice(0,6),c1=local.slice(6,8),c2=local.slice(8,10),c3=local.slice(10,12),ans=local.slice(12);
+    local=q.concat(c1,c3,c2,ans); // C2/C3 整段互换
+    picked=-1;
+    draw();
+    info.innerHTML='🔀 已交换选项 B / C。看 token 下方的位置编号——<b>每个 token 的座次都变了</b>。就算注意力是双向的，位置编码仍然把顺序泄露给模型。';
+  });
+  draw();
+})();
+
+/* ================= S5: 位置 ID 编辑器 ================= */
+(function(){
+  var row=document.getElementById('row5'),info=document.getElementById('info5'),tg=document.getElementById('posToggle');
+  function draw(reset){
+    makeRow(row,{
+      badge:function(i){return reset&&TOKS[i].s.charAt(0)==='C';},
+      badgeText:function(i){return reset?posReset(i):posStd(i);},
+      click:function(i){
+        info.innerHTML='第 '+i+' 个 token（'+segName(TOKS[i].s)+'）的位置 ID：<b>'+(reset?posReset(i):posStd(i))+'</b>';
+      }
+    });
+    if(reset){
+      info.innerHTML='<b>重置模式：</b>问题 0–5 正常计数；选项 A / B / C <b>全部从 6 开始</b>（绿色徽标，完全重叠）；答案 token 从 8 继续——它眼中三个选项叠在同一位置区间，原文说这很晕，但 LoRA 微调后能恢复。';
+    }else{
+      info.innerHTML='<b>标准模式：</b>位置 ID 0–13 一路数到底，token 的座次 = 它的身份。';
+    }
+  }
+  tg.addEventListener('change',function(){draw(tg.checked);});
+  draw(false);
+})();
+
+/* ================= S6: 掩码矩阵 ================= */
+(function(){
+  var mx=document.getElementById('mx'),info=document.getElementById('info6'),ctl=document.getElementById('maskCtl'),
+      lc=document.getElementById('leakCount');
+  var mode='std',activeRow=10;
+  function hdCls(s){return s==='Q'?'q':s==='C1'?'c1':s==='C2'?'c2':s==='C3'?'c3':'a';}
+  function fCls(s){return s==='Q'?'fq':s==='C1'?'fc1':s==='C2'?'fc2':s==='C3'?'fc3':'fa';}
+  function build(){
+    mx.innerHTML='';
+    var corner=document.createElement('div');corner.className='hd';corner.textContent='↓';mx.appendChild(corner);
+    TOKS.forEach(function(tk,j){
+      var h=document.createElement('div');h.className='hd c '+hdCls(tk.s);h.title='列 '+j+'：'+segName(tk.s);
+      h.style.color='#999';h.textContent=j;mx.appendChild(h);
+    });
+    TOKS.forEach(function(tk,i){
+      var rh=document.createElement('div');rh.className='hd '+hdCls(tk.s)+(i===activeRow?' active':'');
+      rh.style.color='#999';rh.textContent=i;rh.title='行 '+i+'：'+segName(tk.s)+'（点击查看视野）';
+      rh.addEventListener('click',function(){activeRow=i;build();});
+      mx.appendChild(rh);
+      TOKS.forEach(function(t2,j){
+        var c=document.createElement('div');c.className='cell';
+        var ok=mode==='std'?maskStd(i,j):maskFix(i,j);
+        if(ok){c.classList.add('on',fCls(t2.s));}
+        if(mode==='std'&&ok&&segOf(i).charAt(0)==='C'&&segOf(j).charAt(0)==='C'&&segOf(i)!==segOf(j)){
+          c.classList.add('leak');c.title='特权泄漏：选项偷看选项';
+        }else if(ok){c.title='允许';}else{c.title='禁止';}
+        mx.appendChild(c);
+      });
+    });
+    var leaks=0;
+    for(var i=0;i<14;i++)for(var j=0;j<14;j++){
+      if(maskStd(i,j)&&segOf(i).charAt(0)==='C'&&segOf(j).charAt(0)==='C'&&segOf(i)!==segOf(j))leaks++;
+    }
+    lc.textContent=mode==='std'?'选项间泄漏边：'+leaks+' 条':'选项间泄漏边：0 条 ✅';
+    var si=segOf(activeRow);
+    var seen=SEGS.map(function(s){var n=0;for(var j=0;j<14;j++){var ok=mode==='std'?maskStd(activeRow,j):maskFix(activeRow,j);if(ok&&TOKS[j].s===s.id)n++;}return {s:s.id,label:s.name,n:n};}).filter(function(p){return p.n>0;});
+    info.innerHTML='行 <b>'+activeRow+'</b>（<b style="color:'+segColor(si)+'">'+segName(si)+'</b>）的视野：'+
+      seen.map(function(p){return '<b style="color:'+segColor(p.s)+'">'+p.label+'×'+p.n+'</b>';}).join('、')+
+      (mode==='fix'&&si.charAt(0)==='C'?' —— <b>只看问题和自己，不看别的选项</b>':'');
+  }
+  ctl.addEventListener('click',function(e){
+    var b=e.target.closest('button');if(!b)return;
+    ctl.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on');mode=b.dataset.m;build();
+  });
+  build();
+})();
+
+/* ================= S7: 流水线步进器 ================= */
+(function(){
+  var NOTES=[
+    '任务提示（Choice / Noul / Score）+ 问题 + 选项 + 「The answer:」——联合编码器把一切都放进一条序列。',
+    'Qwen3-0.6B 共 28 层，只保留前 20 层：最后几层忙着预测下一个 token，中间层更通用。LoRA 挂在第 9–20 层。',
+    '每个选项取「最后一个内容 token」的隐藏状态，再取序列末 token——因果 LM 在末位为预测下一 token 积累了全部上下文。',
+    '决策头 = 2 层 Self-Attention + MLP + 双线性头（+7M 参数）；任务 embedding 告知 Choice / Noul / Score 题型。',
+    'Softmax 输出每个选项的概率——一次前向传播，从头到尾。'
+  ];
+  var blocks=document.querySelectorAll('.pblock'),dots=document.getElementById('sdots'),
+      note=document.getElementById('pnote'),step=0;
+  for(var i=0;i<5;i++){
+    var d=document.createElement('div');d.className='sdot';d.dataset.s=i;
+    d.addEventListener('click',function(){go(+this.dataset.s);});
+    dots.appendChild(d);
+  }
+  function go(n){
+    step=Math.max(0,Math.min(4,n));
+    blocks.forEach(function(b){b.classList.toggle('active',+b.dataset.s===step);});
+    dots.querySelectorAll('.sdot').forEach(function(d){d.classList.toggle('on',+d.dataset.s<=step);});
+    note.innerHTML='<b>Step '+(step+1)+'/5：</b>'+NOTES[step];
+  }
+  document.getElementById('pNext').addEventListener('click',function(){go(step+1);});
+  document.getElementById('pPrev').addEventListener('click',function(){go(step-1);});
+  document.getElementById('pReset').addEventListener('click',function(){go(0);});
+  // 层堆栈
+  var ls=document.getElementById('layerstack');
+  for(var l=1;l<=28;l++){
+    var d2=document.createElement('div');
+    d2.className='lay'+(l<=20?(l>=9?' lora':' on'):' off');
+    d2.title='第 '+l+' 层'+(l<=20?(l>=9?'（LoRA）':'（冻结）'):'（弃用）');
+    ls.appendChild(d2);
+  }
+  go(0);
+})();
+
+/* ================= 载入自检（控制台断言，不影响页面） ================= */
+(function(){
+  var stdLeaks=0,fixLeaks=0;
+  for(var i=0;i<14;i++)for(var j=0;j<14;j++){
+    if(segOf(i).charAt(0)==='C'&&segOf(j).charAt(0)==='C'&&segOf(i)!==segOf(j)){
+      if(maskStd(i,j))stdLeaks++;
+      if(maskFix(i,j))fixLeaks++;
+    }
+  }
+  console.assert(stdLeaks===12,'std leak edges should be 12, got '+stdLeaks);
+  console.assert(fixLeaks===0,'fixed leak edges should be 0, got '+fixLeaks);
+  for(var a=0;a<14;a++)for(var b=0;b<14;b++){
+    if(b>a){console.assert(!maskStd(a,b)&&!maskFix(a,b),'causality broken at '+a+','+b);}
+  }
+  console.assert(posReset(6)===6&&posReset(8)===6&&posReset(10)===6&&posReset(12)===8,'reset positions wrong');
+})();
+</script>
+</body>
+</html>
